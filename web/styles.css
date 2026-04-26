@@ -633,64 +633,6 @@ button[data-tone="ghost"]:hover { color: var(--ink); border-color: var(--ink); b
 .addr-scale span:not(:first-child):not(:last-child) { text-align: center; }
 .addr-scale span:last-child { text-align: right; }
 
-/* compact pid summary chips inline below memory */
-.alloc-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--rule);
-}
-.alloc-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 7px 2px 5px;
-  border: 1px solid var(--coral);
-  background: var(--coral-soft);
-  font-family: var(--mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--ink);
-  white-space: nowrap;
-  transition: box-shadow 200ms;
-}
-.alloc-chip.flash {
-  box-shadow: 0 0 0 1px var(--cyan), 0 0 10px var(--cyan-glow);
-}
-.alloc-chip > b {
-  display: inline-grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  background: var(--coral);
-  color: #1a0908;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 800;
-}
-.alloc-chip .chip-flow {
-  color: var(--ink);
-}
-.alloc-chip .chip-flow .req {
-  color: var(--muted);
-}
-.alloc-chip .chip-flow .arrow {
-  color: var(--coral);
-  margin: 0 1px;
-}
-.alloc-chip .chip-waste {
-  color: var(--amber);
-  font-size: 10px;
-  font-weight: 700;
-  padding-left: 4px;
-  border-left: 1px solid rgba(255, 176, 0, 0.3);
-}
-.alloc-chip .chip-waste.zero {
-  color: var(--lime);
-  border-left-color: rgba(197, 241, 0, 0.3);
-}
 
 /* ════════════ tree + areas (right under memory) ════════════ */
 .lower-grid {
