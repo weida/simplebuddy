@@ -8,10 +8,11 @@
   </head>
   <body>
     <main class="shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Simple Buddy</p>
-          <h1>Buddy 内存分配演示</h1>
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Simple Buddy Allocator</p>
+          <h1>把 Buddy 内存分配过程讲清楚</h1>
+          <p class="lede">基于原 C 项目的 16 个 64K 页模型，动态展示分配、拆分、释放、buddy 查找和合并。</p>
         </div>
         <div class="stats" aria-label="内存状态摘要">
           <div>
@@ -26,11 +27,19 @@
             <span id="largestBlock">2^4</span>
             <small>最大空闲块</small>
           </div>
+          <div>
+            <span id="wasteK">0K</span>
+            <small>内部碎片</small>
+          </div>
         </div>
       </header>
 
       <section class="workspace">
         <aside class="panel controls" aria-label="操作控制">
+          <div class="panel-title">
+            <span>01</span>
+            <h2>操作</h2>
+          </div>
           <div class="control-grid">
             <label>
               进程
@@ -46,14 +55,14 @@
             <button id="freeBtn" type="button">释放</button>
           </div>
           <div class="button-row secondary">
-            <button id="stepBtn" type="button">执行示例下一步</button>
+            <button id="stepBtn" type="button">下一步</button>
             <button id="playBtn" type="button">自动播放</button>
             <button id="resetBtn" type="button">重置</button>
           </div>
           <label class="speed-control">
             演示速度
-            <input id="speedRange" type="range" min="500" max="2400" step="100" value="1200">
-            <span id="speedLabel">1.2 秒/步</span>
+            <input id="speedRange" type="range" min="700" max="2600" step="100" value="1400">
+            <span id="speedLabel">1.4 秒/步</span>
           </label>
           <div class="script">
             <h2>示例流程</h2>
@@ -61,38 +70,93 @@
           </div>
         </aside>
 
-        <section class="panel board" aria-label="内存布局">
-          <div class="board-head">
-            <div>
-              <h2>16 个 64K 页</h2>
-              <p id="message">初始状态：一个 2^4 空闲块覆盖全部内存。</p>
+        <section class="main-stage">
+          <section class="panel board" aria-label="内存布局">
+            <div class="board-head">
+              <div>
+                <div class="panel-title">
+                  <span>02</span>
+                  <h2>连续内存</h2>
+                </div>
+                <p id="message">初始状态：一个 2^4 空闲块覆盖全部内存。</p>
+              </div>
+              <div class="legend">
+                <span><i class="free"></i>空闲块</span>
+                <span><i class="used"></i>已分配</span>
+                <span><i class="active"></i>当前变化</span>
+              </div>
             </div>
-            <div class="legend">
-              <span><i class="free"></i>空闲</span>
-              <span><i class="used"></i>已分配</span>
+            <div id="memory" class="memory" aria-label="内存页"></div>
+            <div class="scale" aria-hidden="true">
+              <span>页 0</span>
+              <span>4</span>
+              <span>8</span>
+              <span>12</span>
+              <span>16</span>
             </div>
-          </div>
-          <div id="memory" class="memory" aria-label="内存页"></div>
-          <div class="scale" aria-hidden="true">
-            <span>0</span>
-            <span>4</span>
-            <span>8</span>
-            <span>12</span>
-            <span>16</span>
-          </div>
-          <div class="areas">
-            <h2>Free Area</h2>
-            <div id="freeAreas" class="area-list"></div>
-          </div>
+          </section>
+
+          <section class="panel explainer" aria-label="当前步骤解说">
+            <div class="panel-title">
+              <span>03</span>
+              <h2>当前步骤解说</h2>
+            </div>
+            <div class="explain-grid">
+              <article>
+                <small>正在发生</small>
+                <h3 id="explainTitle">初始化</h3>
+                <p id="explainBody">全部内存先作为一个 order 4 空闲块进入 free_area[4]。</p>
+              </article>
+              <article>
+                <small>关键公式</small>
+                <code id="formula">block_pages = 2^order</code>
+              </article>
+              <article>
+                <small>下一步</small>
+                <p id="nextAction">点击“下一步”或“自动播放”开始 A 进程申请 34K。</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="lower-grid">
+            <section class="panel tree-panel" aria-label="分裂树">
+              <div class="panel-title">
+                <span>04</span>
+                <h2>分裂树</h2>
+              </div>
+              <div id="tree" class="tree"></div>
+            </section>
+
+            <section class="panel areas" aria-label="Free Area">
+              <div class="panel-title">
+                <span>05</span>
+                <h2>Free Area</h2>
+              </div>
+              <div id="freeAreas" class="area-list"></div>
+            </section>
+          </section>
         </section>
 
-        <section class="panel log-panel" aria-label="操作记录">
-          <div class="log-head">
-            <h2>步骤记录</h2>
-            <button id="clearLogBtn" type="button">清空记录</button>
-          </div>
-          <div id="log" class="log"></div>
-        </section>
+        <aside class="side-column">
+          <section class="panel allocation-panel" aria-label="已分配块">
+            <div class="panel-title">
+              <span>06</span>
+              <h2>已分配块</h2>
+            </div>
+            <div id="allocations" class="allocation-list"></div>
+          </section>
+
+          <section class="panel log-panel" aria-label="操作记录">
+            <div class="log-head">
+              <div class="panel-title">
+                <span>07</span>
+                <h2>记录</h2>
+              </div>
+              <button id="clearLogBtn" type="button">清空</button>
+            </div>
+            <div id="log" class="log"></div>
+          </section>
+        </aside>
       </section>
     </main>
 
