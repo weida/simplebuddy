@@ -730,8 +730,9 @@ button[data-tone="ghost"]:hover { color: var(--ink); border-color: var(--ink); b
 .allocation-list {
   display: grid;
   gap: 5px;
-  max-height: 200px;
+  height: 150px;             /* fixed: panel doesn't reflow as pids come and go */
   overflow-y: auto;
+  align-content: start;
   padding-right: 4px;
   scrollbar-width: thin;
   scrollbar-color: var(--coral) transparent;
@@ -799,8 +800,9 @@ button[data-tone="ghost"]:hover { color: var(--ink); border-color: var(--ink); b
 .log {
   display: grid;
   gap: 2px;
-  max-height: 200px;
+  height: 180px;             /* fixed: new entries scroll into view, panel size constant */
   overflow-y: auto;
+  align-content: start;
   padding-right: 4px;
   font-family: var(--mono);
   scrollbar-width: thin;
