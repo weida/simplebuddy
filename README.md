@@ -1,6 +1,6 @@
 # Simple Buddy Allocator
 
-[中文](#中文) | [English](#english)
+[English](#english) | [中文](#中文)
 
 Browser-based buddy memory allocation visualizer, with the original C reference implementation kept in the repository.
 
@@ -10,8 +10,124 @@ Browser-based buddy memory allocation visualizer, with the original C reference 
 
 ![Simple Buddy web demo screenshot](assets/simplebuddy-web-2026-04-26.png)
 
-<a id="中文"></a>
+<a id="english"></a>
 <details open>
+<summary><strong>English</strong></summary>
+
+Simple Buddy Allocator is a small project for demonstrating the buddy memory allocation algorithm. It keeps the original C reference implementation and adds a browser-based interactive visualizer.
+
+### Highlights
+
+- Visualizes allocation, splitting, freeing, and coalescing
+- Shows contiguous memory, split tree, and `free_area` lists by order
+- Supports step-by-step execution, autoplay, and playback speed control
+- Displays allocated capacity, internal fragmentation, and the buddy formula
+- Supports Chinese / English switching in the web demo
+- Pure static HTML, CSS, and JavaScript; no build step required
+
+### Project Layout
+
+```text
+simplebuddy/
+├── README.md
+├── .gitignore
+├── index.html              # GitHub Pages root entry, redirects to web/
+├── assets/
+│   └── simplebuddy-web-2026-04-26.png
+├── c/                      # C reference implementation
+│   ├── buddy.c
+│   ├── buddy.h
+│   ├── buddytest.c
+│   ├── list.h
+│   └── Makefile
+└── web/                    # Browser visualizer
+    ├── index.html
+    ├── styles.css
+    └── app.js
+```
+
+The `c/` and `web/` directories are independent.
+
+### Algorithm In 60 Seconds
+
+- Memory is divided into fixed-size pages. This demo uses `16` pages, `64K` each
+- Each order has a free list: `free_area[order]`
+- A block at order `i` contains `2^i` pages
+- Allocation rounds the request up to the smallest power-of-two block
+- If the target order is empty, a larger block is split repeatedly
+- Freeing uses `buddy = pfn XOR 2^order` to locate the buddy block
+- Coalescing happens only when the buddy is free and has the same order
+- Internal fragmentation = allocated capacity - requested capacity
+
+### Run The C Version
+
+```bash
+cd c
+make
+./buddytest
+```
+
+Note: the original C code intentionally keeps its older style. Newer GCC versions may fail on implicit function declarations. If compatibility is needed, make that a focused C-only change.
+
+### Run The Web Demo Locally
+
+The Web demo is fully static. A local static server is recommended:
+
+```bash
+python3 -m http.server 8000
+```
+
+Then open:
+
+```text
+http://localhost:8000/web/
+```
+
+You can also open `web/index.html` directly in a browser.
+
+### Publish To GitHub Pages
+
+The live site is served from the `gh-pages` branch. After changing `web/`, commit to the main branch first:
+
+```bash
+git add web/index.html web/styles.css web/app.js
+git commit -m "Update web demo"
+git push origin master
+```
+
+Then publish the `web/` subtree to `gh-pages`:
+
+```bash
+COMMIT=$(git subtree split --prefix web)
+git push origin $COMMIT:gh-pages
+```
+
+GitHub Pages may cache the old version for a few minutes.
+
+### Demo GIF
+
+The GIF at the top shows the autoplay flow after clicking `play`.
+
+If the GIF needs to be regenerated, cover these scenarios:
+
+1. Autoplay the full 8-step script
+2. Switch between Chinese and English
+3. Try manual allocation, then resume scripted playback
+4. Expand the explanation section and show formulas
+5. Test responsive layout below 760px width
+
+### Future Improvements
+
+- Fix C compatibility with newer GCC versions
+- Animate splitting and coalescing at a finer frame level
+- Explain why certain blocks cannot be merged
+- Align C output and Web logs more strictly
+- Allow custom page size, page count, and max order
+
+</details>
+
+<a id="中文"></a>
+<details>
 <summary><strong>中文</strong></summary>
 
 Simple Buddy Allocator 是一个用于演示 Buddy 内存分配算法的小项目。仓库同时保留原始 C 版本和可通过浏览器访问的交互式演示版本。
@@ -127,121 +243,5 @@ GitHub Pages 可能有缓存，发布后等待 1-3 分钟或强制刷新浏览�
 - 增加“为什么不能合并”的解释
 - 让 C 输出和 Web 日志更严格对齐
 - 支持自定义页大小、页数和最大 order
-
-</details>
-
-<a id="english"></a>
-<details>
-<summary><strong>English</strong></summary>
-
-Simple Buddy Allocator is a small project for demonstrating the buddy memory allocation algorithm. It keeps the original C reference implementation and adds a browser-based interactive visualizer.
-
-### Highlights
-
-- Visualizes allocation, splitting, freeing, and coalescing
-- Shows contiguous memory, split tree, and `free_area` lists by order
-- Supports step-by-step execution, autoplay, and playback speed control
-- Displays allocated capacity, internal fragmentation, and the buddy formula
-- Supports Chinese / English switching in the web demo
-- Pure static HTML, CSS, and JavaScript; no build step required
-
-### Project Layout
-
-```text
-simplebuddy/
-├── README.md
-├── .gitignore
-├── index.html              # GitHub Pages root entry, redirects to web/
-├── assets/
-│   └── simplebuddy-web-2026-04-26.png
-├── c/                      # C reference implementation
-│   ├── buddy.c
-│   ├── buddy.h
-│   ├── buddytest.c
-│   ├── list.h
-│   └── Makefile
-└── web/                    # Browser visualizer
-    ├── index.html
-    ├── styles.css
-    └── app.js
-```
-
-The `c/` and `web/` directories are independent.
-
-### Algorithm In 60 Seconds
-
-- Memory is divided into fixed-size pages. This demo uses `16` pages, `64K` each
-- Each order has a free list: `free_area[order]`
-- A block at order `i` contains `2^i` pages
-- Allocation rounds the request up to the smallest power-of-two block
-- If the target order is empty, a larger block is split repeatedly
-- Freeing uses `buddy = pfn XOR 2^order` to locate the buddy block
-- Coalescing happens only when the buddy is free and has the same order
-- Internal fragmentation = allocated capacity - requested capacity
-
-### Run The C Version
-
-```bash
-cd c
-make
-./buddytest
-```
-
-Note: the original C code intentionally keeps its older style. Newer GCC versions may fail on implicit function declarations. If compatibility is needed, make that a focused C-only change.
-
-### Run The Web Demo Locally
-
-The Web demo is fully static. A local static server is recommended:
-
-```bash
-python3 -m http.server 8000
-```
-
-Then open:
-
-```text
-http://localhost:8000/web/
-```
-
-You can also open `web/index.html` directly in a browser.
-
-### Publish To GitHub Pages
-
-The live site is served from the `gh-pages` branch. After changing `web/`, commit to the main branch first:
-
-```bash
-git add web/index.html web/styles.css web/app.js
-git commit -m "Update web demo"
-git push origin master
-```
-
-Then publish the `web/` subtree to `gh-pages`:
-
-```bash
-COMMIT=$(git subtree split --prefix web)
-git push origin $COMMIT:gh-pages
-```
-
-GitHub Pages may cache the old version for a few minutes.
-
-### Demo GIF
-
-The GIF at the top shows the autoplay flow after clicking `play`.
-
-If the GIF needs to be regenerated, cover these scenarios:
-
-1. Autoplay the full 8-step script
-2. Switch between Chinese and English
-3. Try manual allocation, then resume scripted playback
-4. Expand the explanation section and show formulas
-5. Test responsive layout below 760px width
-
-### Future Improvements
-
-- Fix C compatibility with newer GCC versions
-- Animate splitting and coalescing at a finer frame level
-- Explain why certain blocks cannot be merged
-- Align C output and Web logs more strictly
-- Allow custom page size, page count, and max order
 
 </details>

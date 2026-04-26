@@ -174,21 +174,8 @@ def capture(args: argparse.Namespace) -> None:
                 },
             )
             client.call("Page.navigate", {"url": target_url})
-            time.sleep(args.initial_wait)
-            client.call(
-                "Runtime.evaluate",
-                {
-                    "expression": """
-                    (() => {
-                      const play = document.getElementById('playBtn');
-                      if (!play) throw new Error('playBtn not found');
-                      play.click();
-                      return true;
-                    })()
-                    """,
-                    "awaitPromise": True,
-                },
-            )
+            wait_for_page_ready(client, args.initial_wait)
+            start_autoplay(client)
             frames: list[Image.Image] = []
             total_frames = int(args.seconds * args.fps)
             interval = 1 / args.fps
@@ -226,6 +213,63 @@ def capture(args: argparse.Namespace) -> None:
                 chrome.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 chrome.kill()
+
+
+def wait_for_page_ready(client: CDPClient, minimum_wait: float) -> None:
+    time.sleep(minimum_wait)
+    deadline = time.time() + 12
+    expression = """
+    (() => {
+      const play = document.getElementById('playBtn');
+      const used = document.getElementById('usedPages');
+      const memory = document.getElementById('memory');
+      return Boolean(play && used && memory && !play.disabled);
+    })()
+    """
+    while time.time() < deadline:
+        result = client.call("Runtime.evaluate", {"expression": expression, "returnByValue": True})
+        if result.get("result", {}).get("value") is True:
+            return
+        time.sleep(0.2)
+    raise RuntimeError("web demo did not finish initializing")
+
+
+def start_autoplay(client: CDPClient) -> None:
+    deadline = time.time() + 10
+    state_expression = """
+    (() => {
+      const used = document.getElementById('usedPages');
+      const play = document.getElementById('playBtn');
+      const label = document.getElementById('playLabel') || play;
+      return {
+        used: used ? used.textContent.trim() : '',
+        playing: Boolean(label && /pause|暂停/i.test(label.textContent)),
+        disabled: Boolean(play && play.disabled),
+        hasPlay: Boolean(play)
+      };
+    })()
+    """
+    while time.time() < deadline:
+        result = client.call("Runtime.evaluate", {"expression": state_expression, "returnByValue": True})
+        value = result.get("result", {}).get("value", {})
+        if value.get("playing") or (value.get("used") and value["used"] != "0"):
+            return
+        if value.get("hasPlay") and not value.get("playing") and not value.get("disabled"):
+            client.call(
+                "Runtime.evaluate",
+                {
+                    "expression": """
+                    (() => {
+                      const play = document.getElementById('playBtn');
+                      play.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                      return true;
+                    })()
+                    """,
+                    "awaitPromise": True,
+                },
+            )
+        time.sleep(0.2)
+    raise RuntimeError("autoplay did not start after clicking play")
 
 
 def main() -> None:
