@@ -1,10 +1,245 @@
+/* ══════════════════════════════════════════════════════════════════════
+   buddy_alloc demo · main script
+   - same algorithm as the C version (16 pages, 64K/page, MAX_ORDER=5)
+   - i18n: zh/en, persisted in localStorage
+   - re-renders all dynamic text on language switch
+═══════════════════════════════════════════════════════════════════════ */
 (function () {
   "use strict";
 
-  const maxOrder = 5;
+  const maxOrder = 5;            // 0..4 meaningful, max as sentinel
   const pageCount = 16;
   const pageSizeK = 64;
+  const LANG_KEY = "buddy.lang";
 
+  /* ──────────────── i18n dictionary ──────────────── */
+  const i18n = {
+    zh: {
+      title: "Buddy Allocator Debug Console",
+      eyebrow: "kernel.memlab :: buddy_alloc",
+      heroTitle: "BUDDY ALLOCATOR",
+      heroLede: "16 页 · 每页 64K · order 0..4 · 完整追踪 split / merge / xor 过程",
+
+      statUsedPages: "已分配页",
+      statFreePages: "空闲页",
+      statLargest: "最大空闲块",
+      statWaste: "内部碎片",
+
+      panelOps: "OPS / 操作",
+      panelMem: "MEM / 连续内存",
+      panelExplain: "TRACE / 当前步骤",
+      panelTree: "SPLIT TREE / 分裂树",
+      panelArea: "FREE_AREA",
+      panelAlloc: "ALLOC TABLE / 已分配块",
+      panelLog: "LOG / 记录",
+
+      labelPid: "进程 / pid",
+      labelSize: "申请大小 (K)",
+      btnAlloc: "申请",
+      btnFree: "释放",
+      btnStep: "下一步",
+      btnPlay: "自动播放",
+      btnPause: "暂停",
+      btnReset: "重置",
+      btnClear: "清空",
+      labelSpeed: "演示速度",
+      labelScript: "示例流程 / script",
+      speedFmt: "{sec}s/步",
+
+      legendFree: "空闲块",
+      legendUsed: "已分配",
+      legendActive: "当前变化",
+
+      explainNow: "// 正在发生",
+      explainFormula: "// 关键公式",
+      explainNext: "// 下一步",
+
+      initMsg: "初始状态：一个 2^4 空闲块覆盖全部内存。",
+      initExplainTitle: "初始化",
+      initExplainBody: "全部内存先作为一个 order 4 空闲块进入 free_area[4]。每页 64K，所以 order 4 表示 16 页，也就是 1024K。",
+      initFormula: "block_pages = 2^order\norder 4 = 16 pages = 1024K",
+      initNext: "点击\"下一步\"或\"自动播放\"开始 A 进程申请 34K。",
+      initLog: "init: 16 个 64K 页组成一个 order 4 空闲块。",
+
+      stepAllocFmt: "下一步：进程 {pid} 申请 {size}K。",
+      stepFreeFmt: "下一步：进程 {pid} 释放内存。",
+      stepEnd: "示例流程结束，所有块应逐步合并回一个 order 4 空闲块。",
+
+      scriptAllocFmt: "{pid} 申请 {size}K",
+      scriptFreeFmt: "{pid} 释放",
+
+      allocFailTooBigLog: "申请失败：{size}K 超过演示内存容量。",
+      allocFailTooBigTitle: "申请失败",
+      allocFailTooBigBody: "请求 {size}K 大于演示内存的最大连续容量，无法找到可容纳它的 power-of-two 块。",
+      allocFailTooBigCode: "max_capacity = {cap}K",
+
+      allocFailDupLog: "申请失败：进程 {pid} 已经持有内存，请先释放。",
+      allocFailDupTitle: "申请失败",
+      allocFailDupBody: "进程 {pid} 已经占用一个块。本演示用进程名作为唯一标识，避免重复申请覆盖状态。",
+      allocFailDupCode: "pid {pid} already allocated",
+
+      allocFailNoBlockLog: "申请失败：没有可用的 2^{order} 块。",
+      allocFailNoBlockTitle: "没有合适空闲块",
+      allocFailNoBlockBody: "请求 {size}K 需要 order {order}，但 free_area[{order}] 以及更大的空闲链表都没有可拆分的块。",
+      allocFailNoBlockCode: "need >= {rounded}K, order = {order}",
+
+      allocSplitLog: "拆分：页 {start} 的 2^{from} 块产生空闲 buddy，起点 {buddy}，大小 2^{order}。",
+      allocOkLog: "申请：进程 {pid} 请求 {size}K，得到页 {start}-{end}，order {order}。",
+      allocOkMsg: "进程 {pid} 请求 {size}K，实际分配 {rounded}K，内部碎片 {waste}K。",
+      allocOkTitle: "进程 {pid} 分配完成",
+      allocOkBody: "先把 {size}K 向上取到最小可容纳块 {rounded}K，也就是 order {order}。如果 free_area[{order}] 没有块，就从 order {sourceOrder} 取一个更大的块一路二分，左半继续用于分配，右半回到对应 free list。",
+      allocOkCode: "ceil({size}K / 64K) = {pages} 页\n2^{order} = {bs} 页\n内部碎片 = {rounded}K - {size}K = {waste}K",
+
+      freeFailLog: "释放失败：进程 {pid} 没有已分配块。",
+      freeOkLog: "释放：进程 {pid} 归还页 {start}-{end}，order {order}。",
+      freeMergeLog: "合并：页 {start} 与 buddy 合并为 2^{order} 块。",
+      freeOkMsg: "进程 {pid} 已释放，页 {start}-{end} 回收后合并到 order {order}。",
+      freeOkTitle: "进程 {pid} 释放完成",
+      freeOkBody: "释放时先找到当前块的 buddy：buddy_pfn = pfn XOR 2^order。只有 buddy 也是同 order 的空闲块时才能合并；合并后继续向更高 order 检查，直到遇到已分配块或到达最大 order。",
+      freeOkCode: "起点 pfn = {start}\n原 order = {order}\nbuddy = pfn XOR 2^order\n最终空闲块：页 {finalStart}-{finalEnd}, order {finalOrder}",
+
+      endMsg: "示例流程已播放完成，内存回到一个完整的 order 4 空闲块。",
+      endTitle: "演示完成",
+      endBody: "A、B、C、D 都释放后，相邻且同 order 的 buddy 块逐层合并，最终恢复为一个覆盖全部 16 页的 order 4 空闲块。",
+      endCode: "最终：free_area[4] = { 页 0 }\nfree_area[0..3] = 空",
+      endNext: "可以重置后手动尝试不同大小，观察内部碎片和合并是否发生。",
+
+      formInvalid: "请输入有效的进程名和申请大小。",
+      freeMissingPid: "请输入要释放的进程名。",
+      pauseMsg: "自动播放已暂停。",
+      playMsg: "正在自动播放示例流程。",
+
+      areaEmpty: "空",
+      pageRangeFmt: "页 {start}-{end} · order {order}",
+      allocMetaFmt: "请求 {size}K，分配 {alloc}K，内部碎片 {waste}K",
+      allocLabelFmt: "{pid}:2^{order}",
+      freeLabelFmt: "2^{order}",
+      allocEmpty: "暂无已分配块。执行示例后，这里会显示每个进程的页范围、实际分配容量和内部碎片。",
+      areaPageFmt: "p{start}",
+      treeUsedFmt: "{pid} {bytes}K",
+      treeFreeFmt: "free {bytes}K",
+      treeSplit: "split",
+
+      sbModeIdle: "IDLE",
+      sbModePlay: "PLAY",
+      sbModeError: "ERR",
+      sbLangLocale: "zh_CN.UTF-8"
+    },
+
+    en: {
+      title: "Buddy Allocator Debug Console",
+      eyebrow: "kernel.memlab :: buddy_alloc",
+      heroTitle: "BUDDY ALLOCATOR",
+      heroLede: "16 pages · 64K each · order 0..4 · full split / merge / xor tracing",
+
+      statUsedPages: "used pages",
+      statFreePages: "free pages",
+      statLargest: "largest free",
+      statWaste: "internal frag",
+
+      panelOps: "OPS",
+      panelMem: "MEM / contiguous",
+      panelExplain: "TRACE / current step",
+      panelTree: "SPLIT TREE",
+      panelArea: "FREE_AREA",
+      panelAlloc: "ALLOC TABLE",
+      panelLog: "LOG",
+
+      labelPid: "process / pid",
+      labelSize: "request size (K)",
+      btnAlloc: "alloc",
+      btnFree: "free",
+      btnStep: "step",
+      btnPlay: "play",
+      btnPause: "pause",
+      btnReset: "reset",
+      btnClear: "clear",
+      labelSpeed: "playback speed",
+      labelScript: "demo script",
+      speedFmt: "{sec}s/step",
+
+      legendFree: "free",
+      legendUsed: "used",
+      legendActive: "active",
+
+      explainNow: "// what is happening",
+      explainFormula: "// key formula",
+      explainNext: "// next",
+
+      initMsg: "init: a single 2^4 free block covers all memory.",
+      initExplainTitle: "INIT",
+      initExplainBody: "All memory enters free_area[4] as one order 4 free block. Each page is 64K, so order 4 means 16 pages = 1024K total.",
+      initFormula: "block_pages = 2^order\norder 4 = 16 pages = 1024K",
+      initNext: "Click 'step' or 'play' to start: process A requests 34K.",
+      initLog: "init: 16 pages × 64K combined as one order 4 free block.",
+
+      stepAllocFmt: "next: process {pid} requests {size}K.",
+      stepFreeFmt: "next: process {pid} frees its block.",
+      stepEnd: "Demo finished. All blocks should have merged back into one order 4 free block.",
+
+      scriptAllocFmt: "{pid} alloc {size}K",
+      scriptFreeFmt: "{pid} free",
+
+      allocFailTooBigLog: "alloc failed: {size}K exceeds total memory.",
+      allocFailTooBigTitle: "Alloc failed",
+      allocFailTooBigBody: "Request {size}K is larger than the maximum contiguous capacity. No power-of-two block can hold it.",
+      allocFailTooBigCode: "max_capacity = {cap}K",
+
+      allocFailDupLog: "alloc failed: pid {pid} already holds a block — free it first.",
+      allocFailDupTitle: "Alloc failed",
+      allocFailDupBody: "Process {pid} already owns a block. This demo uses pid as a unique key, so duplicate allocations are rejected to keep state consistent.",
+      allocFailDupCode: "pid {pid} already allocated",
+
+      allocFailNoBlockLog: "alloc failed: no free 2^{order} block available.",
+      allocFailNoBlockTitle: "No suitable free block",
+      allocFailNoBlockBody: "Request {size}K needs order {order}, but free_area[{order}] and all higher-order free lists are empty — nothing can be split.",
+      allocFailNoBlockCode: "need >= {rounded}K, order = {order}",
+
+      allocSplitLog: "split: 2^{from} block at page {start} produces a free buddy at {buddy}, size 2^{order}.",
+      allocOkLog: "alloc: pid {pid} requested {size}K → pages {start}-{end}, order {order}.",
+      allocOkMsg: "pid {pid} requested {size}K, allocated {rounded}K, internal frag {waste}K.",
+      allocOkTitle: "pid {pid} allocated",
+      allocOkBody: "Round {size}K up to the smallest power-of-two block that fits: {rounded}K (order {order}). If free_area[{order}] is empty, take a larger block from order {sourceOrder} and split it down — left half keeps splitting, right half goes back to its free list.",
+      allocOkCode: "ceil({size}K / 64K) = {pages} pages\n2^{order} = {bs} pages\ninternal_frag = {rounded}K - {size}K = {waste}K",
+
+      freeFailLog: "free failed: pid {pid} holds no block.",
+      freeOkLog: "free: pid {pid} returned pages {start}-{end}, order {order}.",
+      freeMergeLog: "merge: page {start} merged with buddy → 2^{order} block.",
+      freeOkMsg: "pid {pid} freed. Pages {start}-{end} reclaimed and merged up to order {order}.",
+      freeOkTitle: "pid {pid} freed",
+      freeOkBody: "On free, locate the buddy: buddy_pfn = pfn XOR 2^order. Merge only if the buddy is free and at the same order; then climb to the next order and try again, until a non-mergeable buddy or MAX_ORDER is reached.",
+      freeOkCode: "start pfn = {start}\noriginal order = {order}\nbuddy = pfn XOR 2^order\nfinal free block: pages {finalStart}-{finalEnd}, order {finalOrder}",
+
+      endMsg: "Demo complete. Memory restored to a single order 4 free block.",
+      endTitle: "demo done",
+      endBody: "After A, B, C, D are all freed, adjacent same-order buddies merge upward layer by layer, restoring one order 4 block covering all 16 pages.",
+      endCode: "final: free_area[4] = { page 0 }\nfree_area[0..3] = empty",
+      endNext: "Reset, then try arbitrary sizes manually to see fragmentation and merging in action.",
+
+      formInvalid: "Enter a valid pid and request size.",
+      freeMissingPid: "Enter the pid to free.",
+      pauseMsg: "Playback paused.",
+      playMsg: "Auto-playing demo script.",
+
+      areaEmpty: "·",
+      pageRangeFmt: "pages {start}-{end} · order {order}",
+      allocMetaFmt: "req {size}K, got {alloc}K, frag {waste}K",
+      allocLabelFmt: "{pid}:2^{order}",
+      freeLabelFmt: "2^{order}",
+      allocEmpty: "No allocations yet. Run the script — each pid's page range, allocated size and internal fragmentation will appear here.",
+      areaPageFmt: "p{start}",
+      treeUsedFmt: "{pid} {bytes}K",
+      treeFreeFmt: "free {bytes}K",
+      treeSplit: "split",
+
+      sbModeIdle: "IDLE",
+      sbModePlay: "PLAY",
+      sbModeError: "ERR",
+      sbLangLocale: "en_US.UTF-8"
+    }
+  };
+
+  /* ──────────────── state ──────────────── */
   const state = {
     pages: [],
     freeAreas: [],
@@ -13,15 +248,14 @@
     scriptIndex: 0,
     playing: false,
     timer: null,
-    speed: 1200,
+    speed: 1400,
     focus: null,
-    explanation: {
-      title: "初始化",
-      body: "全部内存先作为一个 order 4 空闲块进入 free_area[4]。",
-      formula: "block_pages = 2^order",
-      next: "点击“下一步”或“自动播放”开始 A 进程申请 34K。"
-    }
+    lang: "zh",
+    bootTime: Date.now(),
+    explanation: { kind: "init", params: {} }
   };
+
+  let messageState = { kind: "key", key: "initMsg", params: {} };
 
   const script = [
     { type: "alloc", pid: "A", size: 34 },
@@ -55,19 +289,72 @@
     freeBtn: document.getElementById("freeBtn"),
     stepBtn: document.getElementById("stepBtn"),
     playBtn: document.getElementById("playBtn"),
+    playLabel: document.getElementById("playLabel"),
     resetBtn: document.getElementById("resetBtn"),
     speedRange: document.getElementById("speedRange"),
     speedLabel: document.getElementById("speedLabel"),
     clearLogBtn: document.getElementById("clearLogBtn"),
-    scriptList: document.getElementById("scriptList")
+    scriptList: document.getElementById("scriptList"),
+    langToggle: document.getElementById("langToggle"),
+    sbMode: document.getElementById("sbMode"),
+    sbStep: document.getElementById("sbStep"),
+    sbFree: document.getElementById("sbFree"),
+    sbUsed: document.getElementById("sbUsed"),
+    sbFrag: document.getElementById("sbFrag"),
+    sbLang: document.getElementById("sbLang"),
+    sbUptime: document.getElementById("sbUptime"),
+    sbModeCell: document.querySelector(".sb-mode"),
+    htmlRoot: document.documentElement
   };
 
+  /* ──────────────── i18n core ──────────────── */
+  function t(key, params) {
+    const dict = i18n[state.lang] || i18n.zh;
+    let str = dict[key];
+    if (str === undefined) str = i18n.zh[key];
+    if (str === undefined) return key;
+    if (params) {
+      str = str.replace(/\{(\w+)\}/g, (_, k) =>
+        params[k] !== undefined ? params[k] : "{" + k + "}"
+      );
+    }
+    return str;
+  }
+
+  function applyStaticI18n() {
+    document.title = t("title");
+    els.htmlRoot.setAttribute("lang", state.lang === "zh" ? "zh-CN" : "en");
+    els.htmlRoot.setAttribute("data-lang", state.lang);
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      const key = el.getAttribute("data-i18n");
+      el.textContent = t(key);
+    });
+    els.sbLang.textContent = t("sbLangLocale");
+  }
+
+  function setLang(lang) {
+    if (lang !== "zh" && lang !== "en") return;
+    state.lang = lang;
+    try { localStorage.setItem(LANG_KEY, lang); } catch (e) { /* ignore */ }
+    applyStaticI18n();
+    updateSpeedLabel();
+    els.playLabel.textContent = state.playing ? t("btnPause") : t("btnPlay");
+    render();
+    updateStatusBar();
+  }
+
+  function loadLang() {
+    let stored = null;
+    try { stored = localStorage.getItem(LANG_KEY); } catch (e) { /* ignore */ }
+    if (stored === "zh" || stored === "en") return stored;
+    const nav = (navigator.language || "").toLowerCase();
+    return nav.startsWith("zh") ? "zh" : "en";
+  }
+
+  /* ──────────────── algorithm ──────────────── */
   function initPages() {
     state.pages = Array.from({ length: pageCount }, (_, index) => ({
-      index,
-      pid: "",
-      order: null,
-      freeOrder: null
+      index, pid: "", order: null, freeOrder: null
     }));
     state.freeAreas = Array.from({ length: maxOrder }, () => []);
     state.freeAreas[maxOrder - 1].push(0);
@@ -78,72 +365,42 @@
   function orderForSize(sizeK) {
     let pages = Math.max(1, Math.ceil(sizeK / pageSizeK));
     let order = 0;
-    let capacity = 1;
-    while (capacity < pages) {
-      capacity *= 2;
-      order += 1;
-    }
+    let cap = 1;
+    while (cap < pages) { cap *= 2; order += 1; }
     return order;
   }
-
-  function blockSize(order) {
-    return 1 << order;
-  }
-
-  function capacityK(order) {
-    return blockSize(order) * pageSizeK;
-  }
-
-  function describeStep(index) {
-    const step = script[index];
-    if (!step) {
-      return "示例流程结束，所有块应逐步合并回一个 order 4 空闲块。";
-    }
-    return step.type === "alloc"
-      ? `下一步：进程 ${step.pid} 申请 ${step.size}K。`
-      : `下一步：进程 ${step.pid} 释放内存。`;
-  }
-
-  function setExplanation(title, body, formula, next) {
-    state.explanation = { title, body, formula, next };
-  }
+  function blockSize(order) { return 1 << order; }
+  function capacityK(order) { return blockSize(order) * pageSizeK; }
 
   function removeFree(start, order) {
     const area = state.freeAreas[order];
-    const index = area.indexOf(start);
-    if (index !== -1) {
-      area.splice(index, 1);
-    }
+    const idx = area.indexOf(start);
+    if (idx !== -1) area.splice(idx, 1);
     state.pages[start].freeOrder = null;
   }
-
   function addFree(start, order) {
     state.pages[start].freeOrder = order;
     state.freeAreas[order].push(start);
     state.freeAreas[order].sort((a, b) => a - b);
   }
 
+  /* ──────────────── ops ──────────────── */
   function allocate(pid, sizeK) {
     const order = orderForSize(sizeK);
     const roundedK = capacityK(order);
+
     if (order >= maxOrder) {
-      addLog(`申请失败：${sizeK}K 超过演示内存容量。`, true);
-      setExplanation(
-        "申请失败",
-        `请求 ${sizeK}K 大于演示内存的最大连续容量，无法找到可容纳它的 power-of-two 块。`,
-        `max_capacity = ${capacityK(maxOrder - 1)}K`,
-        describeStep(state.scriptIndex)
-      );
+      addLog("alloc", t("allocFailTooBigLog", { size: sizeK }), { error: true });
+      setExplanation("allocFailTooBig", { size: sizeK, cap: capacityK(maxOrder - 1), pid: pid });
+      flashMode("error");
+      render();
       return;
     }
     if (state.allocations.has(pid)) {
-      addLog(`申请失败：进程 ${pid} 已经持有内存，请先释放。`, true);
-      setExplanation(
-        "申请失败",
-        `进程 ${pid} 已经占用一个块。这个演示用进程名作为唯一标识，避免重复申请覆盖状态。`,
-        `pid ${pid} already allocated`,
-        describeStep(state.scriptIndex)
-      );
+      addLog("alloc", t("allocFailDupLog", { pid: pid }), { error: true });
+      setExplanation("allocFailDup", { pid: pid, size: sizeK });
+      flashMode("error");
+      render();
       return;
     }
 
@@ -151,52 +408,57 @@
     while (currentOrder < maxOrder && state.freeAreas[currentOrder].length === 0) {
       currentOrder += 1;
     }
-
     if (currentOrder >= maxOrder) {
-      addLog(`申请失败：没有可用的 2^${order} 块。`, true);
-      setExplanation(
-        "没有合适空闲块",
-        `请求 ${sizeK}K 需要 order ${order}，但 free_area[${order}] 以及更大的空闲链表都没有可拆分的块。`,
-        `need >= ${roundedK}K, order = ${order}`,
-        describeStep(state.scriptIndex)
-      );
+      addLog("alloc", t("allocFailNoBlockLog", { order: order }), { error: true });
+      setExplanation("allocFailNoBlock", { size: sizeK, rounded: roundedK, order: order });
+      flashMode("error");
+      render();
       return;
     }
 
     const start = state.freeAreas[currentOrder][0];
     const sourceOrder = currentOrder;
     removeFree(start, currentOrder);
-    state.focus = { kind: "active", start, order: currentOrder };
+    state.focus = { kind: "active", start: start, order: currentOrder };
 
     while (currentOrder > order) {
       currentOrder -= 1;
       const buddyStart = start + blockSize(currentOrder);
       addFree(buddyStart, currentOrder);
       state.focus = { kind: "splitting", start: buddyStart, order: currentOrder };
-      addLog(`拆分：页 ${start} 的 2^${currentOrder + 1} 块产生空闲 buddy，起点 ${buddyStart}，大小 2^${currentOrder}。`);
+      addLog("split", t("allocSplitLog", {
+        start: start, from: currentOrder + 1, buddy: buddyStart, order: currentOrder
+      }));
     }
 
     for (let i = start; i < start + blockSize(order); i += 1) {
       state.pages[i].pid = pid;
       state.pages[i].order = order;
     }
-    state.allocations.set(pid, { start, order, sizeK });
-    state.focus = { kind: "active", start, order };
-    addLog(`申请：进程 ${pid} 请求 ${sizeK}K，得到页 ${start}-${start + blockSize(order) - 1}，order ${order}。`);
-    setMessage(`进程 ${pid} 请求 ${sizeK}K，实际分配 ${roundedK}K，内部碎片 ${roundedK - sizeK}K。`);
-    setExplanation(
-      `进程 ${pid} 分配完成`,
-      `先把 ${sizeK}K 向上取到最小可容纳块 ${roundedK}K，也就是 order ${order}。如果 free_area[${order}] 没有块，就从 order ${sourceOrder} 取一个更大的块一路二分，左半继续用于分配，右半回到对应 free list。`,
-      `ceil(${sizeK}K / 64K) = ${Math.ceil(sizeK / pageSizeK)} 页\n2^${order} = ${blockSize(order)} 页\n内部碎片 = ${roundedK}K - ${sizeK}K = ${roundedK - sizeK}K`,
-      describeStep(state.scriptIndex)
-    );
+    state.allocations.set(pid, { start: start, order: order, sizeK: sizeK });
+    state.focus = { kind: "active", start: start, order: order };
+
+    addLog("alloc", t("allocOkLog", {
+      pid: pid, size: sizeK, start: start,
+      end: start + blockSize(order) - 1, order: order
+    }));
+    setMessageKey("allocOkMsg", {
+      pid: pid, size: sizeK, rounded: roundedK, waste: roundedK - sizeK
+    });
+    setExplanation("allocOk", {
+      pid: pid, size: sizeK, rounded: roundedK, order: order,
+      sourceOrder: sourceOrder, pages: Math.ceil(sizeK / pageSizeK),
+      bs: blockSize(order), waste: roundedK - sizeK
+    });
     render();
   }
 
   function freeProcess(pid) {
     const allocation = state.allocations.get(pid);
     if (!allocation) {
-      addLog(`释放失败：进程 ${pid} 没有已分配块。`, true);
+      addLog("free", t("freeFailLog", { pid: pid }), { error: true });
+      flashMode("error");
+      render();
       return;
     }
 
@@ -208,97 +470,178 @@
       state.pages[i].order = null;
     }
     state.allocations.delete(pid);
-    addLog(`释放：进程 ${pid} 归还页 ${start}-${start + blockSize(order) - 1}，order ${order}。`);
+    addLog("free", t("freeOkLog", {
+      pid: pid, start: start, end: start + blockSize(order) - 1, order: order
+    }));
 
     while (order < maxOrder - 1) {
       const buddyStart = start ^ blockSize(order);
       const buddy = state.pages[buddyStart];
-      if (!buddy || buddy.freeOrder !== order) {
-        break;
-      }
+      if (!buddy || buddy.freeOrder !== order) break;
       removeFree(buddyStart, order);
       start = Math.min(start, buddyStart);
       order += 1;
-      state.focus = { kind: "merging", start, order };
-      addLog(`合并：页 ${start} 与 buddy 合并为 2^${order} 块。`);
+      state.focus = { kind: "merging", start: start, order: order };
+      addLog("merge", t("freeMergeLog", { start: start, order: order }));
     }
 
     addFree(start, order);
-    state.focus = { kind: "active", start, order };
-    setMessage(`进程 ${pid} 已释放，页 ${originalStart}-${originalStart + blockSize(originalOrder) - 1} 回收后合并到 order ${order}。`);
-    setExplanation(
-      `进程 ${pid} 释放完成`,
-      `释放时先找到当前块的 buddy：buddy_pfn = pfn XOR 2^order。只有 buddy 也是同 order 的空闲块时才能合并；合并后继续向更高 order 检查，直到遇到已分配块或到达最大 order。`,
-      `起点 pfn = ${originalStart}\n原 order = ${originalOrder}\nbuddy = pfn XOR 2^order\n最终空闲块：页 ${start}-${start + blockSize(order) - 1}, order ${order}`,
-      describeStep(state.scriptIndex)
-    );
+    state.focus = { kind: "active", start: start, order: order };
+    setMessageKey("freeOkMsg", {
+      pid: pid,
+      start: originalStart,
+      end: originalStart + blockSize(originalOrder) - 1,
+      order: order
+    });
+    setExplanation("freeOk", {
+      pid: pid, start: originalStart, order: originalOrder,
+      finalStart: start, finalEnd: start + blockSize(order) - 1, finalOrder: order
+    });
     render();
   }
 
+  /* ──────────────── explanation (re-renderable) ──────────────── */
+  function setExplanation(kind, params) {
+    state.explanation = { kind: kind, params: params || {} };
+  }
+
+  function renderExplanation() {
+    const { kind, params } = state.explanation;
+    const next = describeStep(state.scriptIndex);
+    let title, body, formula;
+
+    switch (kind) {
+      case "init":
+        title = t("initExplainTitle");
+        body = t("initExplainBody");
+        formula = t("initFormula");
+        break;
+      case "allocFailTooBig":
+        title = t("allocFailTooBigTitle");
+        body = t("allocFailTooBigBody", params);
+        formula = t("allocFailTooBigCode", params);
+        break;
+      case "allocFailDup":
+        title = t("allocFailDupTitle");
+        body = t("allocFailDupBody", params);
+        formula = t("allocFailDupCode", params);
+        break;
+      case "allocFailNoBlock":
+        title = t("allocFailNoBlockTitle");
+        body = t("allocFailNoBlockBody", params);
+        formula = t("allocFailNoBlockCode", params);
+        break;
+      case "allocOk":
+        title = t("allocOkTitle", params);
+        body = t("allocOkBody", params);
+        formula = t("allocOkCode", params);
+        break;
+      case "freeOk":
+        title = t("freeOkTitle", params);
+        body = t("freeOkBody", params);
+        formula = t("freeOkCode", params);
+        break;
+      case "end":
+        title = t("endTitle");
+        body = t("endBody");
+        formula = t("endCode");
+        break;
+      default:
+        title = t("initExplainTitle");
+        body = t("initExplainBody");
+        formula = t("initFormula");
+    }
+
+    els.explainTitle.textContent = title;
+    els.explainBody.textContent = body;
+    els.formula.textContent = formula;
+    els.nextAction.textContent = (kind === "end") ? t("endNext") : next;
+  }
+
+  function describeStep(index) {
+    const step = script[index];
+    if (!step) return t("stepEnd");
+    return step.type === "alloc"
+      ? t("stepAllocFmt", { pid: step.pid, size: step.size })
+      : t("stepFreeFmt", { pid: step.pid });
+  }
+
+  /* ──────────────── messages (re-renderable) ──────────────── */
+  function setMessageKey(key, params) {
+    messageState = { kind: "key", key: key, params: params || {} };
+    els.message.textContent = t(key, params);
+  }
+
+  function renderMessage() {
+    if (messageState.kind === "key") {
+      els.message.textContent = t(messageState.key, messageState.params);
+    }
+  }
+
+  /* ──────────────── current blocks ──────────────── */
   function currentBlocks() {
     const blocks = [];
-
-    state.allocations.forEach((allocation, pid) => {
+    state.allocations.forEach((alloc, pid) => {
       blocks.push({
         type: "used",
-        label: `${pid}:2^${allocation.order}`,
-        start: allocation.start,
-        order: allocation.order
+        label: t("allocLabelFmt", { pid: pid, order: alloc.order }),
+        start: alloc.start, order: alloc.order
       });
     });
-
     state.freeAreas.forEach((starts, order) => {
       starts.forEach((start) => {
         blocks.push({
           type: "free",
-          label: `2^${order}`,
-          start,
-          order
+          label: t("freeLabelFmt", { order: order }),
+          start: start, order: order
         });
       });
     });
-
     return blocks.sort((a, b) => a.start - b.start || b.order - a.order);
   }
 
+  /* ──────────────── render ──────────────── */
   function renderMemory() {
-    els.memory.innerHTML = "";
+    els.memory.replaceChildren();
     for (let i = 0; i < pageCount; i += 1) {
       const page = document.createElement("div");
       page.className = "page";
       page.dataset.index = i;
+      page.dataset.hex = "0x" + i.toString(16).toUpperCase().padStart(2, "0");
       els.memory.appendChild(page);
     }
-
     const blocks = currentBlocks();
     blocks.forEach((block) => {
       const node = document.createElement("div");
-      node.className = `block ${block.type}`;
+      node.className = "block " + block.type;
       if (state.focus && state.focus.start === block.start && state.focus.order === block.order) {
         node.classList.add(state.focus.kind);
       }
       node.textContent = block.label;
-      node.style.left = `calc(${(block.start / pageCount) * 100}% + 2px)`;
-      node.style.width = `calc(${(blockSize(block.order) / pageCount) * 100}% - 4px)`;
-      node.style.top = `${(maxOrder - 1 - block.order) * 30}px`;
+      node.style.left = "calc(" + (block.start / pageCount) * 100 + "% + 2px)";
+      node.style.width = "calc(" + (blockSize(block.order) / pageCount) * 100 + "% - 4px)";
+      node.style.top = ((maxOrder - 1 - block.order) * 36) + "px";
       els.memory.appendChild(node);
     });
   }
 
   function renderFreeAreas() {
-    els.freeAreas.innerHTML = "";
+    els.freeAreas.replaceChildren();
     for (let order = 0; order < maxOrder; order += 1) {
       const area = document.createElement("div");
       area.className = "area";
-      area.innerHTML = `<strong>order ${order}</strong>`;
+      const head = document.createElement("strong");
+      head.textContent = "order " + order;
+      area.appendChild(head);
       if (state.freeAreas[order].length === 0) {
         const empty = document.createElement("span");
-        empty.textContent = "空";
+        empty.className = "empty";
+        empty.textContent = t("areaEmpty");
         area.appendChild(empty);
       } else {
         state.freeAreas[order].forEach((start) => {
           const chip = document.createElement("span");
-          chip.textContent = `页 ${start}`;
+          chip.textContent = t("areaPageFmt", { start: start });
           area.appendChild(chip);
         });
       }
@@ -309,9 +652,9 @@
   function renderStats() {
     let usedPages = 0;
     let wasteK = 0;
-    state.allocations.forEach((allocation) => {
-      usedPages += blockSize(allocation.order);
-      wasteK += capacityK(allocation.order) - allocation.sizeK;
+    state.allocations.forEach((a) => {
+      usedPages += blockSize(a.order);
+      wasteK += capacityK(a.order) - a.sizeK;
     });
     const largest = state.freeAreas.reduce((found, starts, order) => {
       return starts.length > 0 ? order : found;
@@ -319,59 +662,70 @@
 
     els.usedPages.textContent = usedPages;
     els.freePages.textContent = pageCount - usedPages;
-    els.largestBlock.textContent = largest === null ? "-" : `2^${largest}`;
-    els.wasteK.textContent = `${wasteK}K`;
-  }
+    els.largestBlock.textContent = (largest === null) ? "-" : ("2^" + largest);
+    els.wasteK.textContent = wasteK + "K";
 
-  function renderExplanation() {
-    els.explainTitle.textContent = state.explanation.title;
-    els.explainBody.textContent = state.explanation.body;
-    els.formula.textContent = state.explanation.formula;
-    els.nextAction.textContent = state.explanation.next;
+    const usedRatio = usedPages / pageCount;
+    const cyanBar = document.querySelector('.stat[data-tone="cyan"] .stat-bar i');
+    const limeBar = document.querySelector('.stat[data-tone="lime"] .stat-bar i');
+    const amberBar = document.querySelector('.stat[data-tone="amber"] .stat-bar i');
+    const coralBar = document.querySelector('.stat[data-tone="coral"] .stat-bar i');
+    if (cyanBar) cyanBar.style.height = (usedRatio * 100) + "%";
+    if (limeBar) limeBar.style.height = ((1 - usedRatio) * 100) + "%";
+    if (amberBar) amberBar.style.height = (largest === null ? 0 : ((largest + 1) / maxOrder * 100)) + "%";
+    const fragRatio = wasteK > 0 ? Math.min(1, wasteK / (pageSizeK * pageCount * 0.25)) : 0;
+    if (coralBar) coralBar.style.height = (fragRatio * 100) + "%";
+
+    els.sbFree.textContent = pageCount - usedPages;
+    els.sbUsed.textContent = usedPages;
+    els.sbFrag.textContent = wasteK + "K";
   }
 
   function blockAt(start, order) {
-    const allocation = Array.from(state.allocations.entries()).find((entry) => {
-      return entry[1].start === start && entry[1].order === order;
-    });
-    if (allocation) {
-      return { type: "used", label: `${allocation[0]}:${capacityK(order)}K` };
+    const allocEntry = Array.from(state.allocations.entries()).find(
+      (e) => e[1].start === start && e[1].order === order
+    );
+    if (allocEntry) {
+      return {
+        type: "used",
+        label: t("treeUsedFmt", { pid: allocEntry[0], bytes: capacityK(order) })
+      };
     }
     if (state.pages[start] && state.pages[start].freeOrder === order) {
-      return { type: "free", label: `free ${capacityK(order)}K` };
+      return { type: "free", label: t("treeFreeFmt", { bytes: capacityK(order) }) };
     }
     return null;
   }
-
   function hasChildState(start, order) {
-    if (order === 0) {
-      return false;
-    }
+    if (order === 0) return false;
     const half = blockSize(order - 1);
-    return Boolean(blockAt(start, order - 1) || blockAt(start + half, order - 1) || hasChildState(start, order - 1) || hasChildState(start + half, order - 1));
+    return Boolean(
+      blockAt(start, order - 1) ||
+      blockAt(start + half, order - 1) ||
+      hasChildState(start, order - 1) ||
+      hasChildState(start + half, order - 1)
+    );
   }
 
   function renderTree() {
-    els.tree.innerHTML = "";
+    els.tree.replaceChildren();
     for (let order = maxOrder - 1; order >= 0; order -= 1) {
       const row = document.createElement("div");
       row.className = "tree-row";
       const label = document.createElement("div");
       label.className = "tree-label";
-      label.textContent = `order ${order}`;
+      label.textContent = "order " + order;
       const track = document.createElement("div");
       track.className = "tree-track";
-      track.style.gridTemplateColumns = `repeat(${pageCount / blockSize(order)}, minmax(0, 1fr))`;
-
+      track.style.gridTemplateColumns = "repeat(" + (pageCount / blockSize(order)) + ", minmax(0, 1fr))";
       for (let start = 0; start < pageCount; start += blockSize(order)) {
         const node = document.createElement("div");
         const block = blockAt(start, order);
         const split = !block && hasChildState(start, order);
-        node.className = `tree-node ${block ? block.type : split ? "split" : ""}`;
-        node.textContent = block ? block.label : split ? "split" : "";
+        node.className = "tree-node " + (block ? block.type : split ? "split" : "");
+        node.textContent = block ? block.label : split ? t("treeSplit") : "";
         track.appendChild(node);
       }
-
       row.appendChild(label);
       row.appendChild(track);
       els.tree.appendChild(row);
@@ -379,28 +733,33 @@
   }
 
   function renderAllocations() {
-    els.allocations.innerHTML = "";
+    els.allocations.replaceChildren();
     if (state.allocations.size === 0) {
       const empty = document.createElement("div");
       empty.className = "allocation empty";
-      empty.textContent = "暂无已分配块。执行示例后，这里会显示每个进程的页范围、实际分配容量和内部碎片。";
+      empty.textContent = t("allocEmpty");
       els.allocations.appendChild(empty);
       return;
     }
-
     Array.from(state.allocations.entries())
       .sort((a, b) => a[1].start - b[1].start)
-      .forEach(([pid, allocation]) => {
+      .forEach(([pid, alloc]) => {
         const node = document.createElement("div");
         node.className = "allocation";
-        const waste = capacityK(allocation.order) - allocation.sizeK;
+        const waste = capacityK(alloc.order) - alloc.sizeK;
         const badge = document.createElement("b");
         const detail = document.createElement("div");
         const title = document.createElement("p");
         const meta = document.createElement("small");
         badge.textContent = pid;
-        title.textContent = `页 ${allocation.start}-${allocation.start + blockSize(allocation.order) - 1} · order ${allocation.order}`;
-        meta.textContent = `请求 ${allocation.sizeK}K，分配 ${capacityK(allocation.order)}K，内部碎片 ${waste}K`;
+        title.textContent = t("pageRangeFmt", {
+          start: alloc.start,
+          end: alloc.start + blockSize(alloc.order) - 1,
+          order: alloc.order
+        });
+        meta.textContent = t("allocMetaFmt", {
+          size: alloc.sizeK, alloc: capacityK(alloc.order), waste: waste
+        });
         detail.appendChild(title);
         detail.appendChild(meta);
         node.appendChild(badge);
@@ -410,51 +769,84 @@
   }
 
   function renderLog() {
-    els.log.innerHTML = "";
+    els.log.replaceChildren();
     state.log.slice().reverse().forEach((entry) => {
-      const node = document.createElement("div");
-      node.className = entry.error ? "entry error" : "entry";
-      node.textContent = entry.text;
-      els.log.appendChild(node);
+      const row = document.createElement("div");
+      row.className = "entry";
+      row.dataset.kind = entry.error ? "error" : entry.kind;
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = entry.error ? "[ERR]" : ("[" + (entry.kind || "info").toUpperCase() + "]");
+      const text = document.createElement("span");
+      text.className = "text";
+      text.textContent = entry.text;
+      row.appendChild(tag);
+      row.appendChild(text);
+      els.log.appendChild(row);
     });
   }
 
   function renderScript() {
-    els.scriptList.innerHTML = "";
+    els.scriptList.replaceChildren();
     script.forEach((step, index) => {
       const item = document.createElement("li");
-      item.className = index === state.scriptIndex ? "active" : "";
-      if (index < state.scriptIndex) {
-        item.classList.add("done");
-      }
+      if (index === state.scriptIndex) item.classList.add("active");
+      if (index < state.scriptIndex) item.classList.add("done");
       item.textContent = step.type === "alloc"
-        ? `${step.pid} 申请 ${step.size}K`
-        : `${step.pid} 释放`;
+        ? t("scriptAllocFmt", { pid: step.pid, size: step.size })
+        : t("scriptFreeFmt", { pid: step.pid });
       els.scriptList.appendChild(item);
     });
     els.stepBtn.disabled = state.scriptIndex >= script.length || state.playing;
-    els.playBtn.textContent = state.playing ? "暂停播放" : "自动播放";
+    els.playLabel.textContent = state.playing ? t("btnPause") : t("btnPlay");
     els.playBtn.disabled = state.scriptIndex >= script.length && !state.playing;
+    els.sbStep.textContent = state.scriptIndex + "/" + script.length;
   }
 
+  /* ──────────────── log ──────────────── */
+  function addLog(kind, text, opts) {
+    state.log.push({
+      kind: kind, text: text, error: Boolean(opts && opts.error)
+    });
+    renderLog();
+  }
+
+  /* ──────────────── status bar ──────────────── */
+  function setMode(mode) {
+    if (!els.sbModeCell) return;
+    els.sbModeCell.dataset.mode = mode;
+    if (mode === "play") els.sbMode.textContent = t("sbModePlay");
+    else if (mode === "error") els.sbMode.textContent = t("sbModeError");
+    else els.sbMode.textContent = t("sbModeIdle");
+  }
+  function flashMode(mode) {
+    setMode(mode);
+    setTimeout(() => {
+      if (state.playing) setMode("play");
+      else setMode("idle");
+    }, 1200);
+  }
+  function updateStatusBar() {
+    if (state.playing) setMode("play"); else setMode("idle");
+  }
+  function tickUptime() {
+    const sec = Math.floor((Date.now() - state.bootTime) / 1000);
+    const m = String(Math.floor(sec / 60)).padStart(2, "0");
+    const s = String(sec % 60).padStart(2, "0");
+    els.sbUptime.textContent = m + ":" + s;
+  }
+
+  /* ──────────────── render orchestration ──────────────── */
   function render() {
     renderMemory();
     renderFreeAreas();
     renderStats();
     renderExplanation();
+    renderMessage();
     renderTree();
     renderAllocations();
     renderLog();
     renderScript();
-  }
-
-  function addLog(text, error) {
-    state.log.push({ text, error: Boolean(error) });
-    renderLog();
-  }
-
-  function setMessage(text) {
-    els.message.textContent = text;
   }
 
   function readPid() {
@@ -469,14 +861,10 @@
     state.log = [];
     state.scriptIndex = 0;
     state.focus = { kind: "active", start: 0, order: maxOrder - 1 };
-    setExplanation(
-      "初始化",
-      "全部内存先作为一个 order 4 空闲块进入 free_area[4]。这个演示中每页 64K，所以 order 4 表示 16 页，也就是 1024K。",
-      "block_pages = 2^order\norder 4 = 16 页 = 1024K",
-      describeStep(0)
-    );
-    setMessage("初始状态：一个 2^4 空闲块覆盖全部内存。");
-    addLog("初始化：16 个 64K 页组成一个 order 4 空闲块。");
+    setExplanation("init", {});
+    setMessageKey("initMsg");
+    addLog("info", t("initLog"));
+    setMode("idle");
     render();
   }
 
@@ -484,17 +872,12 @@
     const step = script[state.scriptIndex];
     if (!step) {
       stopPlayback();
-      setMessage("示例流程已播放完成，内存回到一个完整的 order 4 空闲块。");
-      setExplanation(
-        "演示完成",
-        "A、B、C、D 都释放后，相邻且同 order 的 buddy 块逐层合并，最终恢复为一个覆盖全部 16 页的 order 4 空闲块。",
-        "最终：free_area[4] = { 页 0 }\nfree_area[0..3] = 空",
-        "可以重置后手动尝试不同大小，观察内部碎片和合并是否发生。"
-      );
+      setMessageKey("endMsg");
+      setExplanation("end", {});
+      setMode("idle");
       render();
       return false;
     }
-
     state.scriptIndex += 1;
     els.processId.value = step.pid;
     if (step.type === "alloc") {
@@ -510,86 +893,83 @@
   function schedulePlayback() {
     clearTimeout(state.timer);
     state.timer = setTimeout(() => {
-      if (!state.playing) {
-        return;
-      }
-      const didRun = runScriptStep();
-      if (didRun) {
-        schedulePlayback();
-      }
+      if (!state.playing) return;
+      const ran = runScriptStep();
+      if (ran) schedulePlayback();
     }, state.speed);
   }
-
   function startPlayback() {
-    if (state.scriptIndex >= script.length) {
-      reset();
-    }
+    if (state.scriptIndex >= script.length) reset();
     state.playing = true;
-    setMessage("正在自动播放示例流程。");
+    setMessageKey("playMsg");
+    setMode("play");
     runScriptStep();
     schedulePlayback();
     renderScript();
   }
-
   function stopPlayback() {
     state.playing = false;
     clearTimeout(state.timer);
     state.timer = null;
+    setMode("idle");
     renderScript();
   }
 
   function updateSpeedLabel() {
     state.speed = Number(els.speedRange.value);
-    els.speedLabel.textContent = `${(state.speed / 1000).toFixed(1)} 秒/步`;
+    els.speedLabel.textContent = t("speedFmt", { sec: (state.speed / 1000).toFixed(1) });
   }
 
+  /* ──────────────── events ──────────────── */
   function bindEvents() {
     els.allocateBtn.addEventListener("click", () => {
       const pid = readPid();
       const sizeK = Number(els.requestSize.value);
       if (!pid || !Number.isFinite(sizeK) || sizeK <= 0) {
-        addLog("请输入有效的进程名和申请大小。", true);
+        addLog("info", t("formInvalid"), { error: true });
+        flashMode("error");
         return;
       }
       allocate(pid, sizeK);
     });
-
     els.freeBtn.addEventListener("click", () => {
       const pid = readPid();
       if (!pid) {
-        addLog("请输入要释放的进程名。", true);
+        addLog("info", t("freeMissingPid"), { error: true });
+        flashMode("error");
         return;
       }
       freeProcess(pid);
     });
-
-    els.stepBtn.addEventListener("click", () => {
-      runScriptStep();
-    });
-
+    els.stepBtn.addEventListener("click", runScriptStep);
     els.playBtn.addEventListener("click", () => {
       if (state.playing) {
         stopPlayback();
-        setMessage("自动播放已暂停。");
+        setMessageKey("pauseMsg");
       } else {
         startPlayback();
       }
     });
-
     els.resetBtn.addEventListener("click", reset);
     els.speedRange.addEventListener("input", () => {
       updateSpeedLabel();
-      if (state.playing) {
-        schedulePlayback();
-      }
+      if (state.playing) schedulePlayback();
     });
     els.clearLogBtn.addEventListener("click", () => {
       state.log = [];
       renderLog();
     });
+    els.langToggle.addEventListener("click", () => {
+      setLang(state.lang === "zh" ? "en" : "zh");
+    });
   }
 
+  /* ──────────────── boot ──────────────── */
+  state.lang = loadLang();
+  applyStaticI18n();
   bindEvents();
   updateSpeedLabel();
   reset();
+  setInterval(tickUptime, 1000);
+  tickUptime();
 }());
