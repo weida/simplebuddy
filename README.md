@@ -4,7 +4,7 @@ Browser-based buddy memory allocation visualizer, with the original C reference 
 
 **Live demo:** https://weida.github.io/simplebuddy/
 
-![Simple Buddy autoplay demo](assets/simplebuddy-demo.gif)
+![Simple Buddy autoplay demo](assets/simplebuddy-demo.webp)
 
 ## Highlights
 
@@ -22,7 +22,7 @@ simplebuddy/
 ├── .gitignore
 ├── index.html              # GitHub Pages root entry, redirects to web/
 ├── assets/
-│   └── simplebuddy-demo.gif
+│   └── simplebuddy-demo.webp
 ├── c/                      # C reference implementation
 │   ├── buddy.c
 │   ├── buddy.h
