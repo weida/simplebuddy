@@ -12,7 +12,6 @@
   const pageSizeK = 64;
   const LANG_KEY = "buddy.lang";
   const EXPLAIN_KEY = "buddy.explain";        // "1" = visible, "0" = collapsed
-  const RESET_DELAY_MS = 600;                  // pause between auto-reset and re-running step
 
   /* ──────────────── i18n dictionary ──────────────── */
   const i18n = {
@@ -280,7 +279,6 @@
     formula: document.getElementById("formula"),
     nextAction: document.getElementById("nextAction"),
     tree: document.getElementById("tree"),
-    allocStrip: document.getElementById("allocStrip"),
     processId: document.getElementById("processId"),
     requestSize: document.getElementById("requestSize"),
     allocateBtn: document.getElementById("allocateBtn"),
@@ -706,58 +704,6 @@
     }
   }
 
-  // compact pid summary chips: [A 34→256K +222]
-  // shows each live allocation's request → actual → waste, inline below memory.
-  function renderAllocStrip() {
-    els.allocStrip.replaceChildren();
-    if (state.allocations.size === 0) {
-      els.allocStrip.hidden = true;
-      return;
-    }
-    els.allocStrip.hidden = false;
-    Array.from(state.allocations.entries())
-      .sort((a, b) => a[1].start - b[1].start)
-      .forEach(([pid, alloc]) => {
-        const allocK = capacityK(alloc.order);
-        const waste = allocK - alloc.sizeK;
-        const chip = document.createElement("span");
-        chip.className = "alloc-chip";
-        chip.dataset.pid = pid;
-        chip.title =
-          pid + ": " + t("pageRangeFmt", {
-            start: alloc.start,
-            end: alloc.start + blockSize(alloc.order) - 1,
-            order: alloc.order
-          });
-        if (state.lastTouchedPid === pid) chip.classList.add("flash");
-
-        const badge = document.createElement("b");
-        badge.textContent = pid;
-
-        const flow = document.createElement("span");
-        flow.className = "chip-flow";
-        const req = document.createElement("span");
-        req.className = "req";
-        req.textContent = alloc.sizeK + "K";
-        const arrow = document.createElement("span");
-        arrow.className = "arrow";
-        arrow.textContent = "→";
-        const got = document.createElement("span");
-        got.textContent = allocK + "K";
-        flow.appendChild(req);
-        flow.appendChild(arrow);
-        flow.appendChild(got);
-
-        const wasteEl = document.createElement("span");
-        wasteEl.className = "chip-waste" + (waste === 0 ? " zero" : "");
-        wasteEl.textContent = "+" + waste + "K";
-
-        chip.appendChild(badge);
-        chip.appendChild(flow);
-        chip.appendChild(wasteEl);
-        els.allocStrip.appendChild(chip);
-      });
-  }
 
   function renderLog() {
     els.log.replaceChildren();
@@ -811,7 +757,6 @@
     renderExplanation();
     renderMessage();
     renderTree();
-    renderAllocStrip();
     renderLog();
     renderScript();
   }
@@ -857,24 +802,22 @@
     }
 
     if (nextStepConflicts()) {
-      // visibly clear state, show notice, then re-run after a beat
+      // sync reset + recurse with clean state — no setTimeout games that
+      // would let schedulePlayback() clobber our recovery timer.
+      // The notice banner + log entry give the user visible feedback.
       initPages();
       state.log = [];
       state.scriptIndex = 0;
-      state.focus = { kind: "active", start: 0, order: maxOrder - 1 };
+      state.lastTouchedPid = null;
       state.manualDirty = false;
+      state.focus = { kind: "active", start: 0, order: maxOrder - 1 };
       setExplanation("init", {});
       setMessageKey("initMsg");
       addLog("info", t("noticeAutoReset"));
       showNotice(t("noticeAutoReset"));
-      render();
-      // queue the actual step run so the user sees the transition
-      clearTimeout(state.timer);
-      state.timer = setTimeout(() => {
-        runScriptStep();
-        if (state.playing) schedulePlayback();
-      }, RESET_DELAY_MS);
-      return true;
+      // intentional: do NOT render() here — recurse and let allocate()'s
+      // own render() paint the post-step state in one frame.
+      return runScriptStep();
     }
 
     const step = script[state.scriptIndex];
