@@ -3,33 +3,21 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title data-i18n="title">Simple Buddy Allocator Demo</title>
+    <title data-i18n="title">Buddy Allocator</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=VT323&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <div class="crt-overlay" aria-hidden="true"></div>
-    <div class="crt-vignette" aria-hidden="true"></div>
 
     <main class="shell">
-      <!-- ════════════ BOOT BANNER ════════════ -->
-      <header class="banner" aria-label="boot banner">
-        <pre class="ascii" aria-hidden="true">
- ╔══════════════════════════════════════════════════════════════════╗
- ║   ▄▄▄▄· ▄• ▄▌·▄▄▄▄  ·▄▄▄▄  ▄· ▄▌    ▄▄▌   ▄▄▄· ▄▄▄▄·            ║
- ║   ▐█ ▀█▪█▪██▌██▪ ██ ██▪ ██ ▐█▪██▌    ██•  ▐█ ▀█ ▐█ ▀█▪           ║
- ║   ▐█▀▀█▄█▌▐█▌▐█· ▐█▌▐█· ▐█▌▐█▌▐█▪    ██▪  ▄█▀▀█ ▐█▀▀█▄           ║
- ║   ██▄▪▐█▐█▄█▌██. ██ ██. ██  ▐█▀·.    ▐█▌▐▌▐█ ▪▐▌██▄▪▐█           ║
- ║   ·▀▀▀▀  ▀▀▀ ▀▀▀▀▀• ▀▀▀▀▀•   ▀ •     .▀▀▀  ▀  ▀ ·▀▀▀▀            ║
- ║                                                                  ║
- ║   buddy_alloc(8) · power-of-two physical page allocator          ║
- ╚══════════════════════════════════════════════════════════════════╝</pre>
-        <div class="banner-meta">
-          <span class="prompt">root@kernel-memlab:~#</span>
-          <span class="cmd">./buddy_alloc --demo --order=4 --page-size=64K</span>
-          <span class="cursor" aria-hidden="true">█</span>
+      <header class="topbar">
+        <div class="topbar-title">
+          <span class="topbar-prompt">$</span>
+          <h1 data-i18n="heroTitle">Buddy 内存分配器</h1>
+          <span class="cursor blink" aria-hidden="true">▌</span>
         </div>
         <button class="lang-toggle" id="langToggle" type="button" aria-label="language">
           <span class="lang-opt zh">ZH</span>
@@ -38,60 +26,35 @@
         </button>
       </header>
 
-      <!-- ════════════ HERO + STATS ════════════ -->
-      <section class="hero panel" data-section="00" data-section-name="HEADER">
-        <div class="hero-copy">
-          <p class="eyebrow" data-i18n="eyebrow">kernel.memlab :: buddy_alloc</p>
-          <h1 class="hero-title">
-            <span data-i18n="heroTitle">BUDDY ALLOCATOR DEBUG CONSOLE</span><span class="cursor blink">▌</span>
-          </h1>
-          <p class="lede" data-i18n="heroLede">16 pages · 64K/page · order 0..4 · split / merge / xor buddy tracing</p>
-          <ul class="badges" aria-hidden="true">
-            <li><b>PAGES</b> 16</li>
-            <li><b>PSIZE</b> 64K</li>
-            <li><b>MAX_ORDER</b> 4</li>
-            <li><b>FORMULA</b> buddy = pfn ⊕ 2^order</li>
-          </ul>
+      <section class="stats" aria-label="stats">
+        <div class="stat" data-tone="cyan">
+          <span id="usedPages" class="stat-num">0</span>
+          <small data-i18n="statUsedPages">已分配页</small>
         </div>
-        <div class="stats" aria-label="stats">
-          <div class="stat" data-tone="cyan">
-            <div class="stat-bar"><i></i></div>
-            <span id="usedPages" class="stat-num">0</span>
-            <small data-i18n="statUsedPages">已分配页</small>
-            <em>used_pages</em>
-          </div>
-          <div class="stat" data-tone="lime">
-            <div class="stat-bar"><i></i></div>
-            <span id="freePages" class="stat-num">16</span>
-            <small data-i18n="statFreePages">空闲页</small>
-            <em>free_pages</em>
-          </div>
-          <div class="stat" data-tone="amber">
-            <div class="stat-bar"><i></i></div>
-            <span id="largestBlock" class="stat-num">2^4</span>
-            <small data-i18n="statLargest">最大空闲块</small>
-            <em>max_free_order</em>
-          </div>
-          <div class="stat" data-tone="coral">
-            <div class="stat-bar"><i></i></div>
-            <span id="wasteK" class="stat-num">0K</span>
-            <small data-i18n="statWaste">内部碎片</small>
-            <em>internal_frag</em>
-          </div>
+        <div class="stat" data-tone="lime">
+          <span id="freePages" class="stat-num">16</span>
+          <small data-i18n="statFreePages">空闲页</small>
+        </div>
+        <div class="stat" data-tone="amber">
+          <span id="largestBlock" class="stat-num">2^4</span>
+          <small data-i18n="statLargest">最大空闲块</small>
+        </div>
+        <div class="stat" data-tone="coral">
+          <span id="wasteK" class="stat-num">0K</span>
+          <small data-i18n="statWaste">内部碎片</small>
         </div>
       </section>
 
       <section class="workspace">
-        <!-- ════════════ 01 OPS ════════════ -->
-        <aside class="panel ctrl" data-section="01" data-section-name="OPS" aria-label="ops">
+        <!-- ops -->
+        <aside class="panel ctrl" aria-label="ops">
           <div class="panel-head">
-            <h2><span class="panel-num">01</span> <span data-i18n="panelOps">OPS / 操作</span></h2>
-            <span class="dot" data-tone="amber"></span>
+            <h2 data-i18n="panelOps">操作</h2>
           </div>
 
           <div class="control-grid">
             <label>
-              <span data-i18n="labelPid">进程 / pid</span>
+              <span data-i18n="labelPid">进程</span>
               <input id="processId" maxlength="1" value="A" autocomplete="off">
             </label>
             <label>
@@ -102,52 +65,47 @@
 
           <div class="button-row">
             <button id="allocateBtn" type="button" data-tone="lime">
-              <span class="btn-tag">[ALLOC]</span><span data-i18n="btnAlloc">申请</span>
+              <span data-i18n="btnAlloc">申请</span>
             </button>
             <button id="freeBtn" type="button" data-tone="coral">
-              <span class="btn-tag">[FREE]</span><span data-i18n="btnFree">释放</span>
+              <span data-i18n="btnFree">释放</span>
             </button>
           </div>
           <div class="button-row triple">
             <button id="stepBtn" type="button" data-tone="cyan">
-              <span class="btn-tag">[STEP]</span><span data-i18n="btnStep">下一步</span>
+              <span data-i18n="btnStep">下一步</span>
             </button>
             <button id="playBtn" type="button" data-tone="amber">
-              <span class="btn-tag">[PLAY]</span><span id="playLabel" data-i18n="btnPlay">自动播放</span>
+              <span id="playLabel" data-i18n="btnPlay">自动播放</span>
             </button>
             <button id="resetBtn" type="button" data-tone="ghost">
-              <span class="btn-tag">[RST]</span><span data-i18n="btnReset">重置</span>
+              <span data-i18n="btnReset">重置</span>
             </button>
           </div>
 
           <label class="speed-control">
             <span class="speed-row">
               <span data-i18n="labelSpeed">演示速度</span>
-              <span id="speedLabel">1.4s/step</span>
+              <span id="speedLabel">1.4s</span>
             </span>
             <input id="speedRange" type="range" min="700" max="2600" step="100" value="1400">
           </label>
 
           <div class="script">
-            <h3>
-              <span class="hash">#</span>
-              <span data-i18n="labelScript">示例流程 / script</span>
-            </h3>
+            <h3 data-i18n="labelScript">示例流程</h3>
             <ol id="scriptList"></ol>
           </div>
         </aside>
 
-        <!-- ════════════ MAIN STAGE ════════════ -->
+        <!-- main stage -->
         <section class="main-stage">
-
-          <!-- ━━━ 02 MEM ━━━ -->
-          <section class="panel board" data-section="02" data-section-name="MEM" aria-label="memory">
+          <section class="panel board" aria-label="memory">
             <div class="panel-head">
-              <h2><span class="panel-num">02</span> <span data-i18n="panelMem">MEM / 连续内存</span></h2>
+              <h2 data-i18n="panelMem">连续内存布局</h2>
               <span class="legend">
-                <span class="lg"><i class="lg-free"></i><span data-i18n="legendFree">空闲块</span></span>
+                <span class="lg"><i class="lg-free"></i><span data-i18n="legendFree">空闲</span></span>
                 <span class="lg"><i class="lg-used"></i><span data-i18n="legendUsed">已分配</span></span>
-                <span class="lg"><i class="lg-active"></i><span data-i18n="legendActive">当前变化</span></span>
+                <span class="lg"><i class="lg-active"></i><span data-i18n="legendActive">变化中</span></span>
               </span>
             </div>
             <p id="message" class="board-msg" data-i18n="initMsg">初始状态：一个 2^4 空闲块覆盖全部内存。</p>
@@ -157,11 +115,9 @@
             </div>
           </section>
 
-          <!-- ━━━ 03 TRACE ━━━ -->
-          <section class="panel explainer" data-section="03" data-section-name="TRACE" aria-label="trace">
+          <section class="panel explainer" aria-label="trace">
             <div class="panel-head">
-              <h2><span class="panel-num">03</span> <span data-i18n="panelExplain">TRACE / 当前步骤</span></h2>
-              <span class="dot blink" data-tone="amber"></span>
+              <h2 data-i18n="panelExplain">当前步骤解说</h2>
             </div>
             <div class="explain-grid">
               <article class="trace-cell" data-tone="cyan">
@@ -175,42 +131,40 @@
               </article>
               <article class="trace-cell" data-tone="lime">
                 <small data-i18n="explainNext">// 下一步</small>
-                <p id="nextAction" data-i18n="initNext">点击"下一步"或"自动播放"开始 A 进程申请 34K。</p>
+                <p id="nextAction" data-i18n="initNext">点击"下一步"或"自动播放"开始演示。</p>
               </article>
             </div>
           </section>
 
           <div class="lower-grid">
-            <!-- ━━━ 04 SPLIT TREE ━━━ -->
-            <section class="panel tree-panel" data-section="04" data-section-name="TREE" aria-label="tree">
+            <section class="panel tree-panel" aria-label="tree">
               <div class="panel-head">
-                <h2><span class="panel-num">04</span> <span data-i18n="panelTree">SPLIT TREE / 分裂树</span></h2>
+                <h2 data-i18n="panelTree">分裂树</h2>
               </div>
               <div id="tree" class="tree"></div>
             </section>
 
-            <!-- ━━━ 05 FREE_AREA ━━━ -->
-            <section class="panel areas" data-section="05" data-section-name="FREE_AREA" aria-label="free area">
+            <section class="panel areas" aria-label="free area">
               <div class="panel-head">
-                <h2><span class="panel-num">05</span> <span data-i18n="panelArea">FREE_AREA</span></h2>
+                <h2 data-i18n="panelArea">FREE_AREA</h2>
               </div>
               <div id="freeAreas" class="area-list"></div>
             </section>
           </div>
         </section>
 
-        <!-- ════════════ SIDE COLUMN ════════════ -->
+        <!-- side -->
         <aside class="side-column">
-          <section class="panel allocation-panel" data-section="06" data-section-name="ALLOC" aria-label="allocations">
+          <section class="panel allocation-panel" aria-label="allocations">
             <div class="panel-head">
-              <h2><span class="panel-num">06</span> <span data-i18n="panelAlloc">ALLOC TABLE / 已分配块</span></h2>
+              <h2 data-i18n="panelAlloc">已分配块</h2>
             </div>
             <div id="allocations" class="allocation-list"></div>
           </section>
 
-          <section class="panel log-panel" data-section="07" data-section-name="LOG" aria-label="log">
+          <section class="panel log-panel" aria-label="log">
             <div class="panel-head">
-              <h2><span class="panel-num">07</span> <span data-i18n="panelLog">LOG / 记录</span></h2>
+              <h2 data-i18n="panelLog">操作记录</h2>
               <button id="clearLogBtn" type="button" class="ghost-btn">
                 <span data-i18n="btnClear">清空</span>
               </button>
@@ -219,40 +173,6 @@
           </section>
         </aside>
       </section>
-
-      <!-- ════════════ STATUS BAR ════════════ -->
-      <footer class="statusbar" aria-label="status bar">
-        <span class="sb-cell sb-mode">
-          <i class="sb-led"></i>
-          <span class="sb-key">MODE</span>
-          <span class="sb-val" id="sbMode">IDLE</span>
-        </span>
-        <span class="sb-cell">
-          <span class="sb-key">STEP</span>
-          <span class="sb-val" id="sbStep">0/8</span>
-        </span>
-        <span class="sb-cell">
-          <span class="sb-key">FREE</span>
-          <span class="sb-val" id="sbFree">16</span>
-        </span>
-        <span class="sb-cell">
-          <span class="sb-key">USED</span>
-          <span class="sb-val" id="sbUsed">0</span>
-        </span>
-        <span class="sb-cell">
-          <span class="sb-key">FRAG</span>
-          <span class="sb-val" id="sbFrag">0K</span>
-        </span>
-        <span class="sb-spacer"></span>
-        <span class="sb-cell">
-          <span class="sb-key">LANG</span>
-          <span class="sb-val" id="sbLang">zh_CN.UTF-8</span>
-        </span>
-        <span class="sb-cell">
-          <span class="sb-key">UPTIME</span>
-          <span class="sb-val" id="sbUptime">00:00</span>
-        </span>
-      </footer>
     </main>
 
     <script src="app.js"></script>
