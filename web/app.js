@@ -11,6 +11,8 @@
   const pageCount = 16;
   const pageSizeK = 64;
   const LANG_KEY = "buddy.lang";
+  const EXPLAIN_KEY = "buddy.explain";        // "1" = visible, "0" = collapsed
+  const RESET_DELAY_MS = 600;                  // pause between auto-reset and re-running step
 
   /* ──────────────── i18n dictionary ──────────────── */
   const i18n = {
@@ -43,12 +45,13 @@
       labelSpeed: "演示速度",
       labelScript: "示例流程",
       speedFmt: "{sec}s",
+      btnExplain: "解说",
 
       legendFree: "空闲",
       legendUsed: "已分配",
       legendActive: "变化中",
 
-      noticeAutoReset: "状态已变化，重置后开始执行示例流程。",
+      noticeAutoReset: "状态已重置，将从示例第 1 步开始。",
 
       explainNow: "// 正在发生",
       explainFormula: "// 关键公式",
@@ -152,12 +155,13 @@
       labelSpeed: "playback speed",
       labelScript: "demo script",
       speedFmt: "{sec}s",
+      btnExplain: "trace",
 
       legendFree: "free",
       legendUsed: "used",
       legendActive: "active",
 
-      noticeAutoReset: "State diverged. Reset before running the demo script.",
+      noticeAutoReset: "State reset. Restarting demo from step 1.",
 
       explainNow: "// what is happening",
       explainFormula: "// key formula",
@@ -290,6 +294,9 @@
     clearLogBtn: document.getElementById("clearLogBtn"),
     scriptList: document.getElementById("scriptList"),
     langToggle: document.getElementById("langToggle"),
+    notice: document.getElementById("notice"),
+    explainerPanel: document.getElementById("explainerPanel"),
+    explainToggle: document.getElementById("explainToggle"),
     htmlRoot: document.documentElement
   };
 
@@ -807,26 +814,48 @@
     render();
   }
 
-  function runScriptStep() {
-    // if user did manual ops before starting the demo, silently reset first
-    // so the canned script (which assumes a fresh state) can run cleanly.
-    if (state.manualDirty && state.scriptIndex === 0) {
-      initPages();
-      state.log = [];
-      state.focus = { kind: "active", start: 0, order: maxOrder - 1 };
-      state.manualDirty = false;
-      addLog("info", t("noticeAutoReset"));
-      setExplanation("init", {});
-    }
-
+  // Detects whether the next script step would conflict with current state
+  // (e.g. user manually allocated A, but script[0] is also alloc A).
+  // If so, we visibly reset, then re-fire the step after a brief delay so
+  // the user actually perceives the state change.
+  function nextStepConflicts() {
     const step = script[state.scriptIndex];
-    if (!step) {
+    if (!step) return false;
+    if (step.type === "alloc") return state.allocations.has(step.pid);
+    return !state.allocations.has(step.pid);
+  }
+
+  function runScriptStep() {
+    if (state.scriptIndex >= script.length) {
       stopPlayback();
       setMessageKey("endMsg");
       setExplanation("end", {});
       render();
       return false;
     }
+
+    if (nextStepConflicts()) {
+      // visibly clear state, show notice, then re-run after a beat
+      initPages();
+      state.log = [];
+      state.scriptIndex = 0;
+      state.focus = { kind: "active", start: 0, order: maxOrder - 1 };
+      state.manualDirty = false;
+      setExplanation("init", {});
+      setMessageKey("initMsg");
+      addLog("info", t("noticeAutoReset"));
+      showNotice(t("noticeAutoReset"));
+      render();
+      // queue the actual step run so the user sees the transition
+      clearTimeout(state.timer);
+      state.timer = setTimeout(() => {
+        runScriptStep();
+        if (state.playing) schedulePlayback();
+      }, RESET_DELAY_MS);
+      return true;
+    }
+
+    const step = script[state.scriptIndex];
     state.scriptIndex += 1;
     els.processId.value = step.pid;
     if (step.type === "alloc") {
@@ -837,6 +866,37 @@
     }
     renderScript();
     return true;
+  }
+
+  /* ──────────────── notice (transient banner) ──────────────── */
+  function showNotice(text) {
+    if (!els.notice) return;
+    els.notice.textContent = text;
+    els.notice.hidden = false;
+    // restart CSS animation by reflowing
+    els.notice.style.animation = "none";
+    void els.notice.offsetWidth;
+    els.notice.style.animation = "";
+    clearTimeout(state.noticeTimer);
+    state.noticeTimer = setTimeout(() => {
+      els.notice.hidden = true;
+    }, 2700);
+  }
+
+  /* ──────────────── explainer toggle ──────────────── */
+  function setExplainerVisible(visible) {
+    state.explainerVisible = !!visible;
+    try { localStorage.setItem(EXPLAIN_KEY, visible ? "1" : "0"); } catch (e) { /* ignore */ }
+    els.explainerPanel.hidden = !visible;
+    els.explainToggle.classList.toggle("active", visible);
+  }
+  function loadExplainPref() {
+    try {
+      const v = localStorage.getItem(EXPLAIN_KEY);
+      if (v === "1") return true;
+      if (v === "0") return false;
+    } catch (e) { /* ignore */ }
+    return false;  // default: collapsed
   }
 
   function schedulePlayback() {
@@ -876,7 +936,6 @@
         addLog("info", t("formInvalid"), { error: true });
         return;
       }
-      state.manualDirty = true;
       allocate(pid, sizeK);
     });
     els.freeBtn.addEventListener("click", () => {
@@ -885,7 +944,6 @@
         addLog("info", t("freeMissingPid"), { error: true });
         return;
       }
-      state.manualDirty = true;
       freeProcess(pid);
     });
     els.stepBtn.addEventListener("click", runScriptStep);
@@ -909,6 +967,9 @@
     els.langToggle.addEventListener("click", () => {
       setLang(state.lang === "zh" ? "en" : "zh");
     });
+    els.explainToggle.addEventListener("click", () => {
+      setExplainerVisible(!state.explainerVisible);
+    });
   }
 
   /* ──────────────── boot ──────────────── */
@@ -916,5 +977,6 @@
   applyStaticI18n();
   bindEvents();
   updateSpeedLabel();
+  setExplainerVisible(loadExplainPref());
   reset();
 }());

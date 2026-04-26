@@ -19,11 +19,16 @@
           <h1 data-i18n="heroTitle">Buddy 内存分配器</h1>
           <span class="cursor blink" aria-hidden="true">▌</span>
         </div>
-        <button class="lang-toggle" id="langToggle" type="button" aria-label="language">
-          <span class="lang-opt zh">ZH</span>
-          <span class="lang-sep">│</span>
-          <span class="lang-opt en">EN</span>
-        </button>
+        <div class="topbar-tools">
+          <button class="explainer-toggle" id="explainToggle" type="button">
+            <span data-i18n="btnExplain">解说</span>
+          </button>
+          <button class="lang-toggle" id="langToggle" type="button" aria-label="language">
+            <span class="lang-opt zh">ZH</span>
+            <span class="lang-sep">/</span>
+            <span class="lang-opt en">EN</span>
+          </button>
+        </div>
       </header>
 
       <section class="stats" aria-label="stats">
@@ -44,6 +49,8 @@
           <small data-i18n="statWaste">内部碎片</small>
         </div>
       </section>
+
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
 
       <section class="workspace">
         <!-- ops -->
@@ -97,7 +104,7 @@
           </div>
         </aside>
 
-        <!-- main stage -->
+        <!-- main: memory + (tree|free_area) -->
         <section class="main-stage">
           <section class="panel board" aria-label="memory">
             <div class="panel-head">
@@ -112,27 +119,6 @@
             <div id="memory" class="memory" aria-label="memory pages"></div>
             <div class="addr-scale" aria-hidden="true">
               <span>0x00</span><span>0x04</span><span>0x08</span><span>0x0C</span><span>0x10</span>
-            </div>
-          </section>
-
-          <section class="panel explainer" aria-label="trace">
-            <div class="panel-head">
-              <h2 data-i18n="panelExplain">当前步骤解说</h2>
-            </div>
-            <div class="explain-grid">
-              <article class="trace-cell" data-tone="cyan">
-                <small data-i18n="explainNow">// 正在发生</small>
-                <h3 id="explainTitle" data-i18n="initExplainTitle">初始化</h3>
-                <p id="explainBody" data-i18n="initExplainBody">全部内存先作为一个 order 4 空闲块进入 free_area[4]。</p>
-              </article>
-              <article class="trace-cell" data-tone="amber">
-                <small data-i18n="explainFormula">// 关键公式</small>
-                <code id="formula">block_pages = 2^order</code>
-              </article>
-              <article class="trace-cell" data-tone="lime">
-                <small data-i18n="explainNext">// 下一步</small>
-                <p id="nextAction" data-i18n="initNext">点击"下一步"或"自动播放"开始演示。</p>
-              </article>
             </div>
           </section>
 
@@ -153,7 +139,7 @@
           </div>
         </section>
 
-        <!-- side -->
+        <!-- side: allocations + log -->
         <aside class="side-column">
           <section class="panel allocation-panel" aria-label="allocations">
             <div class="panel-head">
@@ -172,6 +158,28 @@
             <div id="log" class="log"></div>
           </section>
         </aside>
+      </section>
+
+      <!-- trace explainer (collapsible, hidden by default) -->
+      <section class="panel explainer" id="explainerPanel" aria-label="trace" hidden>
+        <div class="panel-head">
+          <h2 data-i18n="panelExplain">当前步骤解说</h2>
+        </div>
+        <div class="explain-grid">
+          <article class="trace-cell" data-tone="cyan">
+            <small data-i18n="explainNow">// 正在发生</small>
+            <h3 id="explainTitle" data-i18n="initExplainTitle">初始化</h3>
+            <p id="explainBody" data-i18n="initExplainBody">全部内存先作为一个 order 4 空闲块进入 free_area[4]。</p>
+          </article>
+          <article class="trace-cell" data-tone="amber">
+            <small data-i18n="explainFormula">// 关键公式</small>
+            <code id="formula">block_pages = 2^order</code>
+          </article>
+          <article class="trace-cell" data-tone="lime">
+            <small data-i18n="explainNext">// 下一步</small>
+            <p id="nextAction" data-i18n="initNext">点击"下一步"或"自动播放"开始演示。</p>
+          </article>
+        </div>
       </section>
     </main>
 
