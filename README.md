@@ -95,13 +95,11 @@ git push origin $COMMIT:gh-pages
 
 GitHub Pages may cache the old version for a few minutes.
 
-## Regenerate The Demo Video
+## Regenerate The Demo GIF
 
-The README video is captured from the live demo via the Chromium DevTools
-Protocol. Re-run on any machine that has Chrome / Chromium installed:
+The README GIF is captured from the live demo via Chromium DevTools:
 
 ```bash
-# 1. Capture frames as a GIF (the script's native output)
 python3 scripts/capture_demo_gif.py \
   --url https://weida.github.io/simplebuddy/ \
   --width 1280 \
@@ -111,28 +109,7 @@ python3 scripts/capture_demo_gif.py \
   --fps 12 \
   --jpeg-quality 92 \
   --initial-wait 3
-# writes: assets/simplebuddy-demo.gif
-
-# 2. Convert to README-friendly MP4 (smaller, smoother, no GIF color banding)
-ffmpeg -y -i assets/simplebuddy-demo.gif \
-  -vf "minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:vsbmc=1,scale=trunc(iw/2)*2:trunc(ih/2)*2" \
-  -c:v libx264 -pix_fmt yuv420p -crf 18 -preset slow -movflags faststart \
-  assets/simplebuddy-demo.mp4
 ```
-
-Notes on the parameters:
-
-- `--fps` in the capture script controls how many real screenshots are taken
-  per second. `4` (the original value) produces visibly choppy motion;
-  `12` is a good balance between smoothness and capture time. The
-  Chromium DevTools `Page.captureScreenshot` call has overhead, so going
-  much above 15 may not actually produce more real frames.
-- The ffmpeg `minterpolate` filter synthesises additional frames between
-  the real ones (`mi_mode=mci` uses motion-compensated interpolation,
-  better than blend for UI animations).
-- MP4 with H.264 supports full 24-bit color and is typically 4-6x smaller
-  than the equivalent GIF — the amber phosphor gradients in the demo no
-  longer band.
 
 ## Future Improvements
 
