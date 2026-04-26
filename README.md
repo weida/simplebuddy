@@ -57,3 +57,7 @@ make
 ```
 
 Note: the original C code intentionally keeps its older style. Newer GCC versions may fail on implicit function declarations. If compatibility is needed, make that a focused C-only change.
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
