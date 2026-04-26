@@ -730,7 +730,15 @@ button[data-tone="ghost"]:hover { color: var(--ink); border-color: var(--ink); b
 .allocation-list {
   display: grid;
   gap: 5px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--coral) transparent;
 }
+.allocation-list::-webkit-scrollbar { width: 5px; }
+.allocation-list::-webkit-scrollbar-thumb { background: var(--coral); }
+.allocation-list::-webkit-scrollbar-track { background: rgba(255, 94, 82, 0.06); }
 .allocation {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr);
@@ -791,7 +799,7 @@ button[data-tone="ghost"]:hover { color: var(--ink); border-color: var(--ink); b
 .log {
   display: grid;
   gap: 2px;
-  max-height: 320px;
+  max-height: 200px;
   overflow-y: auto;
   padding-right: 4px;
   font-family: var(--mono);
