@@ -4,7 +4,11 @@ Browser-based buddy memory allocation visualizer, with the original C reference 
 
 **Live demo:** https://weida.github.io/simplebuddy/
 
-<video src="assets/simplebuddy-demo.mp4" autoplay loop muted playsinline width="100%"></video>
+![Simple Buddy autoplay demo](assets/simplebuddy-demo.gif)
+
+> Higher-quality MP4 (smoother, smaller, 24-bit color):
+> [`assets/simplebuddy-demo.mp4`](assets/simplebuddy-demo.mp4) — GitHub
+> sanitises raw `<video>` tags in README, so the GIF is what renders inline.
 
 ![Simple Buddy web demo screenshot](assets/simplebuddy-web-2026-04-26.png)
 
@@ -24,7 +28,8 @@ simplebuddy/
 ├── .gitignore
 ├── index.html              # GitHub Pages root entry, redirects to web/
 ├── assets/
-│   ├── simplebuddy-demo.mp4
+│   ├── simplebuddy-demo.gif      # README inline (GitHub renders it)
+│   ├── simplebuddy-demo.mp4      # higher-quality alternative
 │   └── simplebuddy-web-2026-04-26.png
 ├── c/                      # C reference implementation
 │   ├── buddy.c
