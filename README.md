@@ -4,7 +4,7 @@ Browser-based buddy memory allocation visualizer, with the original C reference 
 
 **Live demo:** https://weida.github.io/simplebuddy/
 
-![Simple Buddy autoplay demo](assets/simplebuddy-demo.gif)
+<video src="assets/simplebuddy-demo.mp4" autoplay loop muted playsinline width="100%"></video>
 
 ![Simple Buddy web demo screenshot](assets/simplebuddy-web-2026-04-26.png)
 
@@ -24,7 +24,7 @@ simplebuddy/
 ├── .gitignore
 ├── index.html              # GitHub Pages root entry, redirects to web/
 ├── assets/
-│   ├── simplebuddy-demo.gif
+│   ├── simplebuddy-demo.mp4
 │   └── simplebuddy-web-2026-04-26.png
 ├── c/                      # C reference implementation
 │   ├── buddy.c
@@ -98,27 +98,44 @@ git push origin $COMMIT:gh-pages
 
 GitHub Pages may cache the old version for a few minutes.
 
-## Regenerate The Demo GIF
+## Regenerate The Demo Video
 
-The README GIF is generated from the live demo with Chromium DevTools screenshots:
+The README video is captured from the live demo via the Chromium DevTools
+Protocol. Re-run on any machine that has Chrome / Chromium installed:
 
 ```bash
+# 1. Capture frames as a GIF (the script's native output)
 python3 scripts/capture_demo_gif.py \
   --url https://weida.github.io/simplebuddy/ \
   --width 1280 \
   --height 860 \
   --scale 0.9 \
   --seconds 13 \
-  --fps 4 \
+  --fps 12 \
   --jpeg-quality 92 \
   --initial-wait 3
+# writes: assets/simplebuddy-demo.gif
+
+# 2. Convert to README-friendly MP4 (smaller, smoother, no GIF color banding)
+ffmpeg -y -i assets/simplebuddy-demo.gif \
+  -vf "minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:vsbmc=1,scale=trunc(iw/2)*2:trunc(ih/2)*2" \
+  -c:v libx264 -pix_fmt yuv420p -crf 18 -preset slow -movflags faststart \
+  assets/simplebuddy-demo.mp4
 ```
 
-The script writes:
+Notes on the parameters:
 
-```text
-assets/simplebuddy-demo.gif
-```
+- `--fps` in the capture script controls how many real screenshots are taken
+  per second. `4` (the original value) produces visibly choppy motion;
+  `12` is a good balance between smoothness and capture time. The
+  Chromium DevTools `Page.captureScreenshot` call has overhead, so going
+  much above 15 may not actually produce more real frames.
+- The ffmpeg `minterpolate` filter synthesises additional frames between
+  the real ones (`mi_mode=mci` uses motion-compensated interpolation,
+  better than blend for UI animations).
+- MP4 with H.264 supports full 24-bit color and is typically 4-6x smaller
+  than the equivalent GIF — the amber phosphor gradients in the demo no
+  longer band.
 
 ## Future Improvements
 
