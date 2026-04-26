@@ -15,23 +15,21 @@
   /* ──────────────── i18n dictionary ──────────────── */
   const i18n = {
     zh: {
-      title: "Buddy Allocator Debug Console",
-      eyebrow: "kernel.memlab :: buddy_alloc",
-      heroTitle: "BUDDY ALLOCATOR",
-      heroLede: "16 页 · 每页 64K · order 0..4 · 完整追踪 split / merge / xor 过程",
+      title: "Buddy 内存分配器",
+      heroTitle: "Buddy 内存分配器",
 
       statUsedPages: "已分配页",
       statFreePages: "空闲页",
       statLargest: "最大空闲块",
       statWaste: "内部碎片",
 
-      panelOps: "OPS / 操作",
-      panelMem: "MEM / 连续内存",
-      panelExplain: "TRACE / 当前步骤",
-      panelTree: "SPLIT TREE / 分裂树",
+      panelOps: "操作",
+      panelMem: "连续内存布局",
+      panelExplain: "当前步骤解说",
+      panelTree: "分裂树",
       panelArea: "FREE_AREA",
-      panelAlloc: "ALLOC TABLE / 已分配块",
-      panelLog: "LOG / 记录",
+      panelAlloc: "已分配块",
+      panelLog: "操作记录",
 
       labelPid: "进程 / pid",
       labelSize: "申请大小 (K)",
@@ -43,12 +41,14 @@
       btnReset: "重置",
       btnClear: "清空",
       labelSpeed: "演示速度",
-      labelScript: "示例流程 / script",
-      speedFmt: "{sec}s/步",
+      labelScript: "示例流程",
+      speedFmt: "{sec}s",
 
-      legendFree: "空闲块",
+      legendFree: "空闲",
       legendUsed: "已分配",
-      legendActive: "当前变化",
+      legendActive: "变化中",
+
+      noticeAutoReset: "状态已变化，重置后开始执行示例流程。",
 
       explainNow: "// 正在发生",
       explainFormula: "// 关键公式",
@@ -58,7 +58,7 @@
       initExplainTitle: "初始化",
       initExplainBody: "全部内存先作为一个 order 4 空闲块进入 free_area[4]。每页 64K，所以 order 4 表示 16 页，也就是 1024K。",
       initFormula: "block_pages = 2^order\norder 4 = 16 pages = 1024K",
-      initNext: "点击\"下一步\"或\"自动播放\"开始 A 进程申请 34K。",
+      initNext: "点击\"下一步\"或\"自动播放\"开始演示，也可以手动输入参数后申请。",
       initLog: "init: 16 个 64K 页组成一个 order 4 空闲块。",
 
       stepAllocFmt: "下一步：进程 {pid} 申请 {size}K。",
@@ -120,30 +120,25 @@
       treeFreeFmt: "free {bytes}K",
       treeSplit: "split",
 
-      sbModeIdle: "IDLE",
-      sbModePlay: "PLAY",
-      sbModeError: "ERR",
-      sbLangLocale: "zh_CN.UTF-8"
+      _trailing: ""
     },
 
     en: {
-      title: "Buddy Allocator Debug Console",
-      eyebrow: "kernel.memlab :: buddy_alloc",
-      heroTitle: "BUDDY ALLOCATOR",
-      heroLede: "16 pages · 64K each · order 0..4 · full split / merge / xor tracing",
+      title: "Buddy Allocator",
+      heroTitle: "Buddy Allocator",
 
       statUsedPages: "used pages",
       statFreePages: "free pages",
       statLargest: "largest free",
       statWaste: "internal frag",
 
-      panelOps: "OPS",
-      panelMem: "MEM / contiguous",
-      panelExplain: "TRACE / current step",
-      panelTree: "SPLIT TREE",
+      panelOps: "ops",
+      panelMem: "contiguous memory",
+      panelExplain: "current step",
+      panelTree: "split tree",
       panelArea: "FREE_AREA",
-      panelAlloc: "ALLOC TABLE",
-      panelLog: "LOG",
+      panelAlloc: "allocations",
+      panelLog: "log",
 
       labelPid: "process / pid",
       labelSize: "request size (K)",
@@ -156,11 +151,13 @@
       btnClear: "clear",
       labelSpeed: "playback speed",
       labelScript: "demo script",
-      speedFmt: "{sec}s/step",
+      speedFmt: "{sec}s",
 
       legendFree: "free",
       legendUsed: "used",
       legendActive: "active",
+
+      noticeAutoReset: "State diverged. Reset before running the demo script.",
 
       explainNow: "// what is happening",
       explainFormula: "// key formula",
@@ -170,7 +167,7 @@
       initExplainTitle: "INIT",
       initExplainBody: "All memory enters free_area[4] as one order 4 free block. Each page is 64K, so order 4 means 16 pages = 1024K total.",
       initFormula: "block_pages = 2^order\norder 4 = 16 pages = 1024K",
-      initNext: "Click 'step' or 'play' to start: process A requests 34K.",
+      initNext: "Click 'step' or 'play' to start the demo, or enter values and click alloc.",
       initLog: "init: 16 pages × 64K combined as one order 4 free block.",
 
       stepAllocFmt: "next: process {pid} requests {size}K.",
@@ -232,10 +229,7 @@
       treeFreeFmt: "free {bytes}K",
       treeSplit: "split",
 
-      sbModeIdle: "IDLE",
-      sbModePlay: "PLAY",
-      sbModeError: "ERR",
-      sbLangLocale: "en_US.UTF-8"
+      _trailing: ""
     }
   };
 
@@ -251,7 +245,7 @@
     speed: 1400,
     focus: null,
     lang: "zh",
-    bootTime: Date.now(),
+    manualDirty: false,         // set by manual alloc/free clicks; auto-reset on next step
     explanation: { kind: "init", params: {} }
   };
 
@@ -296,14 +290,6 @@
     clearLogBtn: document.getElementById("clearLogBtn"),
     scriptList: document.getElementById("scriptList"),
     langToggle: document.getElementById("langToggle"),
-    sbMode: document.getElementById("sbMode"),
-    sbStep: document.getElementById("sbStep"),
-    sbFree: document.getElementById("sbFree"),
-    sbUsed: document.getElementById("sbUsed"),
-    sbFrag: document.getElementById("sbFrag"),
-    sbLang: document.getElementById("sbLang"),
-    sbUptime: document.getElementById("sbUptime"),
-    sbModeCell: document.querySelector(".sb-mode"),
     htmlRoot: document.documentElement
   };
 
@@ -329,7 +315,6 @@
       const key = el.getAttribute("data-i18n");
       el.textContent = t(key);
     });
-    els.sbLang.textContent = t("sbLangLocale");
   }
 
   function setLang(lang) {
@@ -340,7 +325,6 @@
     updateSpeedLabel();
     els.playLabel.textContent = state.playing ? t("btnPause") : t("btnPlay");
     render();
-    updateStatusBar();
   }
 
   function loadLang() {
@@ -392,14 +376,12 @@
     if (order >= maxOrder) {
       addLog("alloc", t("allocFailTooBigLog", { size: sizeK }), { error: true });
       setExplanation("allocFailTooBig", { size: sizeK, cap: capacityK(maxOrder - 1), pid: pid });
-      flashMode("error");
       render();
       return;
     }
     if (state.allocations.has(pid)) {
       addLog("alloc", t("allocFailDupLog", { pid: pid }), { error: true });
       setExplanation("allocFailDup", { pid: pid, size: sizeK });
-      flashMode("error");
       render();
       return;
     }
@@ -411,7 +393,6 @@
     if (currentOrder >= maxOrder) {
       addLog("alloc", t("allocFailNoBlockLog", { order: order }), { error: true });
       setExplanation("allocFailNoBlock", { size: sizeK, rounded: roundedK, order: order });
-      flashMode("error");
       render();
       return;
     }
@@ -457,7 +438,6 @@
     const allocation = state.allocations.get(pid);
     if (!allocation) {
       addLog("free", t("freeFailLog", { pid: pid }), { error: true });
-      flashMode("error");
       render();
       return;
     }
@@ -664,21 +644,6 @@
     els.freePages.textContent = pageCount - usedPages;
     els.largestBlock.textContent = (largest === null) ? "-" : ("2^" + largest);
     els.wasteK.textContent = wasteK + "K";
-
-    const usedRatio = usedPages / pageCount;
-    const cyanBar = document.querySelector('.stat[data-tone="cyan"] .stat-bar i');
-    const limeBar = document.querySelector('.stat[data-tone="lime"] .stat-bar i');
-    const amberBar = document.querySelector('.stat[data-tone="amber"] .stat-bar i');
-    const coralBar = document.querySelector('.stat[data-tone="coral"] .stat-bar i');
-    if (cyanBar) cyanBar.style.height = (usedRatio * 100) + "%";
-    if (limeBar) limeBar.style.height = ((1 - usedRatio) * 100) + "%";
-    if (amberBar) amberBar.style.height = (largest === null ? 0 : ((largest + 1) / maxOrder * 100)) + "%";
-    const fragRatio = wasteK > 0 ? Math.min(1, wasteK / (pageSizeK * pageCount * 0.25)) : 0;
-    if (coralBar) coralBar.style.height = (fragRatio * 100) + "%";
-
-    els.sbFree.textContent = pageCount - usedPages;
-    els.sbUsed.textContent = usedPages;
-    els.sbFrag.textContent = wasteK + "K";
   }
 
   function blockAt(start, order) {
@@ -800,7 +765,6 @@
     els.stepBtn.disabled = state.scriptIndex >= script.length || state.playing;
     els.playLabel.textContent = state.playing ? t("btnPause") : t("btnPlay");
     els.playBtn.disabled = state.scriptIndex >= script.length && !state.playing;
-    els.sbStep.textContent = state.scriptIndex + "/" + script.length;
   }
 
   /* ──────────────── log ──────────────── */
@@ -809,31 +773,6 @@
       kind: kind, text: text, error: Boolean(opts && opts.error)
     });
     renderLog();
-  }
-
-  /* ──────────────── status bar ──────────────── */
-  function setMode(mode) {
-    if (!els.sbModeCell) return;
-    els.sbModeCell.dataset.mode = mode;
-    if (mode === "play") els.sbMode.textContent = t("sbModePlay");
-    else if (mode === "error") els.sbMode.textContent = t("sbModeError");
-    else els.sbMode.textContent = t("sbModeIdle");
-  }
-  function flashMode(mode) {
-    setMode(mode);
-    setTimeout(() => {
-      if (state.playing) setMode("play");
-      else setMode("idle");
-    }, 1200);
-  }
-  function updateStatusBar() {
-    if (state.playing) setMode("play"); else setMode("idle");
-  }
-  function tickUptime() {
-    const sec = Math.floor((Date.now() - state.bootTime) / 1000);
-    const m = String(Math.floor(sec / 60)).padStart(2, "0");
-    const s = String(sec % 60).padStart(2, "0");
-    els.sbUptime.textContent = m + ":" + s;
   }
 
   /* ──────────────── render orchestration ──────────────── */
@@ -860,21 +799,31 @@
     initPages();
     state.log = [];
     state.scriptIndex = 0;
+    state.manualDirty = false;
     state.focus = { kind: "active", start: 0, order: maxOrder - 1 };
     setExplanation("init", {});
     setMessageKey("initMsg");
     addLog("info", t("initLog"));
-    setMode("idle");
     render();
   }
 
   function runScriptStep() {
+    // if user did manual ops before starting the demo, silently reset first
+    // so the canned script (which assumes a fresh state) can run cleanly.
+    if (state.manualDirty && state.scriptIndex === 0) {
+      initPages();
+      state.log = [];
+      state.focus = { kind: "active", start: 0, order: maxOrder - 1 };
+      state.manualDirty = false;
+      addLog("info", t("noticeAutoReset"));
+      setExplanation("init", {});
+    }
+
     const step = script[state.scriptIndex];
     if (!step) {
       stopPlayback();
       setMessageKey("endMsg");
       setExplanation("end", {});
-      setMode("idle");
       render();
       return false;
     }
@@ -902,7 +851,6 @@
     if (state.scriptIndex >= script.length) reset();
     state.playing = true;
     setMessageKey("playMsg");
-    setMode("play");
     runScriptStep();
     schedulePlayback();
     renderScript();
@@ -911,7 +859,6 @@
     state.playing = false;
     clearTimeout(state.timer);
     state.timer = null;
-    setMode("idle");
     renderScript();
   }
 
@@ -927,18 +874,18 @@
       const sizeK = Number(els.requestSize.value);
       if (!pid || !Number.isFinite(sizeK) || sizeK <= 0) {
         addLog("info", t("formInvalid"), { error: true });
-        flashMode("error");
         return;
       }
+      state.manualDirty = true;
       allocate(pid, sizeK);
     });
     els.freeBtn.addEventListener("click", () => {
       const pid = readPid();
       if (!pid) {
         addLog("info", t("freeMissingPid"), { error: true });
-        flashMode("error");
         return;
       }
+      state.manualDirty = true;
       freeProcess(pid);
     });
     els.stepBtn.addEventListener("click", runScriptStep);
@@ -970,6 +917,4 @@
   bindEvents();
   updateSpeedLabel();
   reset();
-  setInterval(tickUptime, 1000);
-  tickUptime();
 }());
