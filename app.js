@@ -117,7 +117,7 @@
       allocMetaFmt: "请求 {size}K，分配 {alloc}K，内部碎片 {waste}K",
       allocLabelFmt: "{pid}:2^{order}",
       freeLabelFmt: "2^{order}",
-      allocEmpty: "暂无已分配块。执行示例后，这里会显示每个进程的页范围、实际分配容量和内部碎片。",
+      allocEmpty: "// 暂无已分配块",
       areaPageFmt: "p{start}",
       treeUsedFmt: "{pid} {bytes}K",
       treeFreeFmt: "free {bytes}K",
@@ -227,7 +227,7 @@
       allocMetaFmt: "req {size}K, got {alloc}K, frag {waste}K",
       allocLabelFmt: "{pid}:2^{order}",
       freeLabelFmt: "2^{order}",
-      allocEmpty: "No allocations yet. Run the script — each pid's page range, allocated size and internal fragmentation will appear here.",
+      allocEmpty: "// no allocations",
       areaPageFmt: "p{start}",
       treeUsedFmt: "{pid} {bytes}K",
       treeFreeFmt: "free {bytes}K",
@@ -425,6 +425,7 @@
     }
     state.allocations.set(pid, { start: start, order: order, sizeK: sizeK });
     state.focus = { kind: "active", start: start, order: order };
+    state.lastTouchedPid = pid;
 
     addLog("alloc", t("allocOkLog", {
       pid: pid, size: sizeK, start: start,
@@ -457,6 +458,7 @@
       state.pages[i].order = null;
     }
     state.allocations.delete(pid);
+    state.lastTouchedPid = null;
     addLog("free", t("freeOkLog", {
       pid: pid, start: start, end: start + blockSize(order) - 1, order: order
     }));
@@ -713,11 +715,13 @@
       els.allocations.appendChild(empty);
       return;
     }
+    let touchedNode = null;
     Array.from(state.allocations.entries())
       .sort((a, b) => a[1].start - b[1].start)
       .forEach(([pid, alloc]) => {
         const node = document.createElement("div");
         node.className = "allocation";
+        node.dataset.pid = pid;
         const waste = capacityK(alloc.order) - alloc.sizeK;
         const badge = document.createElement("b");
         const detail = document.createElement("div");
@@ -737,7 +741,10 @@
         node.appendChild(badge);
         node.appendChild(detail);
         els.allocations.appendChild(node);
+        if (state.lastTouchedPid === pid) touchedNode = node;
       });
+    // bring the row that was just allocated into view
+    if (touchedNode) touchedNode.scrollIntoView({ block: "nearest" });
   }
 
   function renderLog() {
@@ -756,6 +763,8 @@
       row.appendChild(text);
       els.log.appendChild(row);
     });
+    // newest entry is rendered at the top — keep it in view
+    els.log.scrollTop = 0;
   }
 
   function renderScript() {
@@ -807,6 +816,7 @@
     state.log = [];
     state.scriptIndex = 0;
     state.manualDirty = false;
+    state.lastTouchedPid = null;
     state.focus = { kind: "active", start: 0, order: maxOrder - 1 };
     setExplanation("init", {});
     setMessageKey("initMsg");
