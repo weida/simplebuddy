@@ -120,6 +120,7 @@
             <div class="addr-scale" aria-hidden="true">
               <span>0x00</span><span>0x04</span><span>0x08</span><span>0x0C</span><span>0x10</span>
             </div>
+            <div id="allocStrip" class="alloc-strip" aria-label="allocations" hidden></div>
           </section>
 
           <div class="lower-grid">
@@ -139,15 +140,8 @@
           </div>
         </section>
 
-        <!-- side: allocations + log -->
+        <!-- side: log -->
         <aside class="side-column">
-          <section class="panel allocation-panel" aria-label="allocations">
-            <div class="panel-head">
-              <h2 data-i18n="panelAlloc">已分配块</h2>
-            </div>
-            <div id="allocations" class="allocation-list"></div>
-          </section>
-
           <section class="panel log-panel" aria-label="log">
             <div class="panel-head">
               <h2 data-i18n="panelLog">操作记录</h2>

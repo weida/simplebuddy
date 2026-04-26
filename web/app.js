@@ -280,7 +280,7 @@
     formula: document.getElementById("formula"),
     nextAction: document.getElementById("nextAction"),
     tree: document.getElementById("tree"),
-    allocations: document.getElementById("allocations"),
+    allocStrip: document.getElementById("allocStrip"),
     processId: document.getElementById("processId"),
     requestSize: document.getElementById("requestSize"),
     allocateBtn: document.getElementById("allocateBtn"),
@@ -706,45 +706,57 @@
     }
   }
 
-  function renderAllocations() {
-    els.allocations.replaceChildren();
+  // compact pid summary chips: [A 34→256K +222]
+  // shows each live allocation's request → actual → waste, inline below memory.
+  function renderAllocStrip() {
+    els.allocStrip.replaceChildren();
     if (state.allocations.size === 0) {
-      const empty = document.createElement("div");
-      empty.className = "allocation empty";
-      empty.textContent = t("allocEmpty");
-      els.allocations.appendChild(empty);
+      els.allocStrip.hidden = true;
       return;
     }
-    let touchedNode = null;
+    els.allocStrip.hidden = false;
     Array.from(state.allocations.entries())
       .sort((a, b) => a[1].start - b[1].start)
       .forEach(([pid, alloc]) => {
-        const node = document.createElement("div");
-        node.className = "allocation";
-        node.dataset.pid = pid;
-        const waste = capacityK(alloc.order) - alloc.sizeK;
+        const allocK = capacityK(alloc.order);
+        const waste = allocK - alloc.sizeK;
+        const chip = document.createElement("span");
+        chip.className = "alloc-chip";
+        chip.dataset.pid = pid;
+        chip.title =
+          pid + ": " + t("pageRangeFmt", {
+            start: alloc.start,
+            end: alloc.start + blockSize(alloc.order) - 1,
+            order: alloc.order
+          });
+        if (state.lastTouchedPid === pid) chip.classList.add("flash");
+
         const badge = document.createElement("b");
-        const detail = document.createElement("div");
-        const title = document.createElement("p");
-        const meta = document.createElement("small");
         badge.textContent = pid;
-        title.textContent = t("pageRangeFmt", {
-          start: alloc.start,
-          end: alloc.start + blockSize(alloc.order) - 1,
-          order: alloc.order
-        });
-        meta.textContent = t("allocMetaFmt", {
-          size: alloc.sizeK, alloc: capacityK(alloc.order), waste: waste
-        });
-        detail.appendChild(title);
-        detail.appendChild(meta);
-        node.appendChild(badge);
-        node.appendChild(detail);
-        els.allocations.appendChild(node);
-        if (state.lastTouchedPid === pid) touchedNode = node;
+
+        const flow = document.createElement("span");
+        flow.className = "chip-flow";
+        const req = document.createElement("span");
+        req.className = "req";
+        req.textContent = alloc.sizeK + "K";
+        const arrow = document.createElement("span");
+        arrow.className = "arrow";
+        arrow.textContent = "→";
+        const got = document.createElement("span");
+        got.textContent = allocK + "K";
+        flow.appendChild(req);
+        flow.appendChild(arrow);
+        flow.appendChild(got);
+
+        const wasteEl = document.createElement("span");
+        wasteEl.className = "chip-waste" + (waste === 0 ? " zero" : "");
+        wasteEl.textContent = "+" + waste + "K";
+
+        chip.appendChild(badge);
+        chip.appendChild(flow);
+        chip.appendChild(wasteEl);
+        els.allocStrip.appendChild(chip);
       });
-    // bring the row that was just allocated into view
-    if (touchedNode) touchedNode.scrollIntoView({ block: "nearest" });
   }
 
   function renderLog() {
@@ -799,7 +811,7 @@
     renderExplanation();
     renderMessage();
     renderTree();
-    renderAllocations();
+    renderAllocStrip();
     renderLog();
     renderScript();
   }
