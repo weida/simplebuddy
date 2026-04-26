@@ -11,3 +11,7 @@ c/buddytest
 .DS_Store
 .idea/
 .vscode/
+
+# Python helper scripts
+__pycache__/
+*.pyc

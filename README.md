@@ -6,9 +6,13 @@ Browser-based buddy memory allocation visualizer, with the original C reference 
 
 **Live demo:** https://weida.github.io/simplebuddy/
 
-![Simple Buddy web demo](assets/simplebuddy-web-2026-04-26.png)
+![Simple Buddy autoplay demo](assets/simplebuddy-demo.gif)
 
-## 中文
+![Simple Buddy web demo screenshot](assets/simplebuddy-web-2026-04-26.png)
+
+<a id="中文"></a>
+<details open>
+<summary><strong>中文</strong></summary>
 
 Simple Buddy Allocator 是一个用于演示 Buddy 内存分配算法的小项目。仓库同时保留原始 C 版本和可通过浏览器访问的交互式演示版本。
 
@@ -104,11 +108,11 @@ git push origin $COMMIT:gh-pages
 
 GitHub Pages 可能有缓存，发布后等待 1-3 分钟或强制刷新浏览器。
 
-### 演示视频
+### 演示 GIF
 
-TODO: 后续可补充 GIF 或视频。
+顶部 GIF 展示了点击 `play` 后的自动播放流程。
 
-建议录制内容：
+如需重新录制，建议覆盖：
 
 1. 自动播放完整 8 步流程
 2. 中文 / English 切换
@@ -124,7 +128,11 @@ TODO: 后续可补充 GIF 或视频。
 - 让 C 输出和 Web 日志更严格对齐
 - 支持自定义页大小、页数和最大 order
 
-## English
+</details>
+
+<a id="english"></a>
+<details>
+<summary><strong>English</strong></summary>
 
 Simple Buddy Allocator is a small project for demonstrating the buddy memory allocation algorithm. It keeps the original C reference implementation and adds a browser-based interactive visualizer.
 
@@ -216,11 +224,11 @@ git push origin $COMMIT:gh-pages
 
 GitHub Pages may cache the old version for a few minutes.
 
-### Demo Video
+### Demo GIF
 
-TODO: add a GIF or video later.
+The GIF at the top shows the autoplay flow after clicking `play`.
 
-Suggested recording checklist:
+If the GIF needs to be regenerated, cover these scenarios:
 
 1. Autoplay the full 8-step script
 2. Switch between Chinese and English
@@ -235,3 +243,5 @@ Suggested recording checklist:
 - Explain why certain blocks cannot be merged
 - Align C output and Web logs more strictly
 - Allow custom page size, page count, and max order
+
+</details>
