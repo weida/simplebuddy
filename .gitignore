@@ -1,0 +1,13 @@
+# C build artifacts
+*.o
+*.a
+*.so
+c/buddytest
+
+# Editor / OS
+*~
+*.swp
+*.swo
+.DS_Store
+.idea/
+.vscode/
